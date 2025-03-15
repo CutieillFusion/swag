@@ -145,8 +145,6 @@ def train_idm(
         optimizer, mode="min", factor=0.33, patience=7, min_lr=1e-9
     )
 
-    scaler = torch.amp.GradScaler()
-
     best_val_loss = float("inf")
     best_val_loss_result = ""
     patience_counter = 0
@@ -169,31 +167,29 @@ def train_idm(
 
             optimizer.zero_grad()
 
-            with torch.amp.autocast(device_type=device.type):
-                logits = model(videos)
+            logits = model(videos)
 
-                if logits.size(1) > 32 and labels.size(0) > 32:
-                    logits = logits[:, 16:-16, :]
-                    labels = labels[:, 16:-16]
+            if logits.size(1) > 32 and labels.size(0) > 32:
+                logits = logits[:, 16:-16, :]
+                labels = labels[:, 16:-16]
 
-                logits = logits.reshape(-1, logits.size(-1))
-                labels = labels.reshape(-1)
+            logits = logits.reshape(-1, logits.size(-1))
+            labels = labels.reshape(-1)
 
-                if logits.size(0) == 0 or labels.size(0) == 0:
-                    print("Skipping batch due to empty logits or labels.")
-                    continue
+            if logits.size(0) == 0 or labels.size(0) == 0:
+                print("Skipping batch due to empty logits or labels.")
+                continue
 
-                loss = criterion(logits, labels)
+            loss = criterion(logits, labels)
 
-                if torch.isnan(loss):
-                    print("NaN loss detected! Skipping batch.")
-                    optimizer.zero_grad()
-                    continue
+            if torch.isnan(loss):
+                print("NaN loss detected! Skipping batch.")
+                optimizer.zero_grad()
+                continue
 
-            scaler.scale(loss).backward()
+            loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            scaler.step(optimizer)
-            scaler.update()
+            optimizer.step()
 
             training_loss += loss.item()
             _, predicted = torch.max(logits, dim=1)
@@ -281,7 +277,7 @@ def train_idm(
             best_model.save_model(f"{model_path}/best_model.pt")
         else:
             patience_counter += 1
-            if patience_counter >= patience and current_epoch > 40:
+            if patience_counter >= patience:
                 print(f"Early stopping at epoch {current_epoch}")
                 break
 

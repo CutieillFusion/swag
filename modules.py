@@ -7,15 +7,15 @@ class ResNetBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
         super(ResNetBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
-        self.silu = nn.SiLU()
+        self.relu = nn.ReLU()
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding)
 
     def forward(self, x):
         out = self.conv1(x)
-        out = self.silu(out)
+        out = self.relu(out)
         residual = out
         out = self.conv2(out)
-        out = self.silu(out)
+        out = self.relu(out)
         out = out + residual
         return out
 
@@ -50,27 +50,18 @@ class L2Norm(nn.Module):
 
 
 class MultiheadAttention(nn.Module):
-    def __init__(self, embedding_dim, num_heads, causal=False):
+    def __init__(self, embedding_dim, num_heads):
         super(MultiheadAttention, self).__init__()
         self.attn = nn.MultiheadAttention(embedding_dim, num_heads, batch_first=True)
         self.q_proj = nn.Linear(embedding_dim, embedding_dim)
         self.k_proj = nn.Linear(embedding_dim, embedding_dim)
         self.v_proj = nn.Linear(embedding_dim, embedding_dim)
-        self.causal = causal
 
-    def forward(self, x, mask=None):
+    def forward(self, x):
         q = self.q_proj(x)
         k = self.k_proj(x)
         v = self.v_proj(x)
-        
-        if self.causal and mask is None:
-            seq_len = x.size(1)
-            causal_mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1).bool()
-            causal_mask = causal_mask.to(x.device)
-            attn_output, _ = self.attn(q, k, v, attn_mask=causal_mask)
-        else:
-            attn_output, _ = self.attn(q, k, v, attn_mask=mask)
-            
+        attn_output, _ = self.attn(q, k, v)
         return attn_output
 
 
@@ -78,7 +69,7 @@ class FeedForward(nn.Module):
     def __init__(self, embed_dim, ff_dim, dropout=0.1):
         super(FeedForward, self).__init__()
         self.mlp = nn.Sequential(
-            nn.Linear(embed_dim, ff_dim), nn.SiLU(), nn.Linear(ff_dim, embed_dim)
+            nn.Linear(embed_dim, ff_dim), nn.ReLU(), nn.Linear(ff_dim, embed_dim)
         )
         self.dropout = nn.Dropout(dropout)
 

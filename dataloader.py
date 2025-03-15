@@ -328,15 +328,20 @@ if __name__ == "__main__":
         video_ids=ids,
         data_dir=dir_path,
         sequence_length=64,
-        image_dims=(60, 64),
+        image_dims=(240, 256),
         batch_size=8,
         cache_capacity=cache_capacity,
     )
 
     start_time = time.time()
     for i, (video, label) in enumerate(video_dataset):
-        print(video[0])
-        pass
+        # Save the first frame of the first video in the batch
+        for j in range(video.size(1)):
+            first_frame = video[7][j].cpu().numpy().transpose(1, 2, 0)  # Convert from CxHxW to HxWxC
+            first_frame = (first_frame * 255).astype(np.uint8)
+            cv2.imwrite(f'frame_{j}_{label[7][j]}.png', first_frame)
+            print(f"Frame {j} saved to 'frame_{j}_{label[7][j]}.png'")
+        break
     end_time = time.time()
     print(
         f"Total time for {len(video_dataset) * video_dataset.batch_size} Loads is {end_time - start_time}"
@@ -345,13 +350,13 @@ if __name__ == "__main__":
         f"Average time for loading is {(end_time - start_time) / (len(video_dataset) * video_dataset.batch_size)}"
     )
 
-    start_time = time.time()
-    for i, (video, label) in enumerate(video_dataset):
-        pass
-    end_time = time.time()
-    print(
-        f"Total time for {len(video_dataset) * video_dataset.batch_size} Loads is {end_time - start_time}"
-    )
-    print(
-        f"Average time for loading is {(end_time - start_time) / (len(video_dataset) * video_dataset.batch_size)}"
-    )
+    # start_time = time.time()
+    # for i, (video, label) in enumerate(video_dataset):
+    #     pass
+    # end_time = time.time()
+    # print(
+    #     f"Total time for {len(video_dataset) * video_dataset.batch_size} Loads is {end_time - start_time}"
+    # )
+    # print(
+    #     f"Average time for loading is {(end_time - start_time) / (len(video_dataset) * video_dataset.batch_size)}"
+    # )

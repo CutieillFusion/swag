@@ -27,7 +27,7 @@ class IDM(nn.Module):
                 stride=(1, 1, 1),
                 padding=(0, 0, 2),
             ),
-            nn.SiLU(),
+            nn.ReLU(),
         )
 
         feature_extractor_layers = []
@@ -45,7 +45,7 @@ class IDM(nn.Module):
         self.embedder = nn.Sequential(
             nn.Flatten(),
             nn.Linear(in_features, embedding_dim // 2),
-            nn.SiLU(),
+            nn.ReLU(),
             nn.Linear(embedding_dim // 2, embedding_dim),
         )
 
