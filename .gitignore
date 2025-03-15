@@ -1,0 +1,10 @@
+/.venv
+/__pycache__
+/slurm
+__pycache__
+/idm/data/*
+/vpt/data/*
+/idm/models/*
+/vpt/models/*
+utils/misc/idm_video_ids.txt
+utils/misc/vpt_video_ids.txt
