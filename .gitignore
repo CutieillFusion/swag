@@ -8,3 +8,4 @@ __pycache__
 /vpt/models/*
 utils/misc/idm_video_ids.txt
 utils/misc/vpt_video_ids.txt
+label_histogram.png

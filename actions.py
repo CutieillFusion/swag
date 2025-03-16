@@ -47,7 +47,7 @@ for action, button_list in enumerate(ACTION_SPACE):
 
 mapping_action = {v: k for k, v in action_map.items()}
 
-def convert_int_to_action(input: int):
+def convert_int_to_action(input: int) -> str:
     if input in mapping_action.keys():
         return mapping_action[input]
 

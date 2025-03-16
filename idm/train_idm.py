@@ -15,13 +15,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def top_k_accuracy(logits, labels, k=3):
+def top_k_accuracy(logits: torch.Tensor, labels: torch.Tensor, k: int = 3) -> float:
     _, pred = torch.topk(logits, k=k, dim=1)
     correct = pred.eq(labels.view(-1, 1).expand_as(pred))
     return correct.sum().item()
 
 
-def compute_metrics(logits: torch.Tensor, labels: torch.Tensor):
+def compute_metrics(logits: torch.Tensor, labels: torch.Tensor) -> tuple[float, float, float]:
     probs = F.softmax(logits, dim=1)
 
     _, predicted = torch.max(probs, dim=1)
@@ -36,7 +36,7 @@ def compute_metrics(logits: torch.Tensor, labels: torch.Tensor):
     return precision, recall, f1
 
 
-def save_confusion_matrix(all_labels, all_logits, filename="confusion_matrix.png"):
+def save_confusion_matrix(all_labels: torch.Tensor, all_logits: torch.Tensor, filename: str = "confusion_matrix.png") -> None:
     probs = torch.nn.functional.softmax(all_logits, dim=1)
     _, predicted = torch.max(probs, dim=1)
 
@@ -51,10 +51,12 @@ def save_confusion_matrix(all_labels, all_logits, filename="confusion_matrix.png
 
     cm = confusion_matrix(all_labels, predicted, labels=top10_classes)
 
+    cm_log = np.log1p(cm)
+
     plt.figure(figsize=(10, 7))
     sns.heatmap(
-        cm,
-        annot=True,
+        cm_log,
+        annot=cm,   
         fmt="d",
         cmap="Blues",
         xticklabels=top10_labels,
@@ -62,15 +64,15 @@ def save_confusion_matrix(all_labels, all_logits, filename="confusion_matrix.png
     )
     plt.xlabel("Predicted")
     plt.ylabel("True")
-    plt.title("Confusion Matrix (Top 10 Largest Classes)")
+    plt.title("Confusion Matrix (Top 10 Largest Classes) - Log Scale")
     plt.tight_layout()
     plt.savefig(filename)
     plt.close()
 
 
 def save_prediction_class_histogram(
-    all_labels, all_logits, filename="prediction_class_histogram.png"
-):
+    all_labels: torch.Tensor, all_logits: torch.Tensor, filename: str = "prediction_class_histogram.png"
+) -> None:
     probs = torch.nn.functional.softmax(all_logits, dim=1)
     _, predicted = torch.max(probs, dim=1)
 
@@ -89,17 +91,25 @@ def save_prediction_class_histogram(
     text_labels = [action_meanings[cls] for cls in sorted_classes]
 
     plt.figure(figsize=(10, 6))
-    plt.bar(text_labels, counts, color="skyblue")
+    bars = plt.bar(text_labels, counts, color="skyblue")
+    
+    plt.yscale('log')
+    
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width() / 2.0, height*1.05,
+                 f'{int(height)}', ha='center', va='bottom')
+    
     plt.xlabel("Class")
-    plt.ylabel("Number of Correct Predictions")
-    plt.title("Histogram of Correct Predictions per Class")
+    plt.ylabel("Number of Correct Predictions (Log Scale)")
+    plt.title("Histogram of Correct Predictions per Class (Log Scale)")
     plt.xticks(rotation=90)
-    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.3)
     plt.savefig(filename)
     plt.close()
 
 
-def compute_class_weights(dataloader, num_classes, device):
+def compute_class_weights(dataloader: ChunkedNumpyDataset, num_classes: int, device: torch.device) -> torch.Tensor:
     all_labels = []
 
     for _, labels in dataloader:
@@ -114,9 +124,7 @@ def compute_class_weights(dataloader, num_classes, device):
         )
     )
 
-    # Use mean weight for unseen classes instead of extreme value
-    mean_weight = np.mean(list(class_weights_dict.values()))
-    class_weights = np.full(num_classes, mean_weight, dtype=np.float32)
+    class_weights = np.full(num_classes, 1000, dtype=np.float32)
     for cls, weight in class_weights_dict.items():
         class_weights[cls] = weight
 
@@ -135,7 +143,7 @@ def train_idm(
     criterion: nn.Module = nn.CrossEntropyLoss(),
     device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     job_id: int = 0,
-):
+) -> int:
 
     optimizer = torch.optim.Adam(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
@@ -275,18 +283,17 @@ def train_idm(
             else:
                 best_model = model
             best_model.save_model(f"{model_path}/best_model.pt")
+            save_prediction_class_histogram(
+                all_labels, all_logits, filename=f"{model_path}/prediction_class_histogram.png"
+            )
+            save_confusion_matrix(
+                all_labels, all_logits, filename=f"{model_path}/confusion_matrix.png"
+            )
         else:
             patience_counter += 1
             if patience_counter >= patience:
                 print(f"Early stopping at epoch {current_epoch}")
                 break
-
-    save_prediction_class_histogram(
-        all_labels, all_logits, filename=f"{model_path}/prediction_class_histogram.png"
-    )
-    save_confusion_matrix(
-        all_labels, all_logits, filename=f"{model_path}/confusion_matrix.png"
-    )
     print("Training complete.")
     print(f"[Best Epoch {best_val_loss_result}")
     return current_epoch
@@ -294,7 +301,7 @@ def train_idm(
 
 def measure_inference_time(
     model: nn.Module, dataloader: ChunkedNumpyDataset, device: torch.device
-):
+) -> None:
     model.eval()
 
     total_start_time = time.time()
@@ -315,7 +322,7 @@ def measure_inference_time(
     )
 
 
-def parse_arguments():
+def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Argument Parser for Model Configuration"
     )
@@ -361,7 +368,7 @@ def parse_arguments():
     args = parser.parse_args()
     return args
 
-def main():
+def main() -> None:
     args = parse_arguments()
 
     model_path = os.path.join("idm/models", str(args.job_id))
@@ -401,7 +408,7 @@ def main():
     split_index = int(len(ids) * 0.9375)
 
     training_dataset = ChunkedNumpyDataset(
-        video_ids=ids[:split_index], 
+        video_ids=ids, 
         data_dir=dir_path,
         sequence_length=input_dims[0],
         image_dims=(input_dims[2], input_dims[3]),

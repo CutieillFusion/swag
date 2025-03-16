@@ -63,7 +63,7 @@ class IDM(nn.Module):
         if freeze:
             self._freeze()
 
-    def _3d_convo(self, x: torch.Tensor):
+    def _3d_convo(self, x: torch.Tensor) -> torch.Tensor:
         # [B, T, C, W, H] -> [B, T, W, H, C]
         x = x.permute(0, 1, 3, 4, 2)
 
@@ -73,7 +73,7 @@ class IDM(nn.Module):
         x = x.permute(0, 1, 4, 2, 3)
         return x
 
-    def _2d_convo(self, x: torch.Tensor):
+    def _2d_convo(self, x: torch.Tensor) -> torch.Tensor:
         batch_size, sequence_length, C, H, W = x.shape
 
         x = x.view(-1, C, H, W)
@@ -88,7 +88,7 @@ class IDM(nn.Module):
 
         return x
 
-    def _embedder(self, x: torch.Tensor):
+    def _embedder(self, x: torch.Tensor) -> torch.Tensor:
         batch_size, sequence_length, C, H, W = x.shape
 
         x = x.reshape(-1, C, H, W)
@@ -103,7 +103,7 @@ class IDM(nn.Module):
 
         return x
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self._3d_convo(x)
 
         x = self._2d_convo(x)
@@ -116,7 +116,7 @@ class IDM(nn.Module):
 
         return logits
 
-    def print_model_parameters(self):
+    def print_model_parameters(self) -> None:
         total_params = 0
         print("Model Parameters:")
         for name, param in self.named_parameters():
@@ -130,7 +130,7 @@ class IDM(nn.Module):
         for p in self.parameters():
             p.requires_grad = False
 
-    def inference_time_breakdown(self, x):
+    def inference_time_breakdown(self, x: torch.Tensor) -> None:
         start = time.time()
         x = self._3d_convo(x)
         step_3d_convo_time = time.time() - start
@@ -158,10 +158,10 @@ class IDM(nn.Module):
 
         return logits
 
-    def save_model(self, path):
+    def save_model(self, path: str) -> None:
         torch.save(self.state_dict(), path)
 
-    def load_model(self, path):
+    def load_model(self, path: str) -> None:
         state_dict = torch.load(
             path,
             map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"),

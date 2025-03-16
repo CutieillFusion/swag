@@ -10,7 +10,7 @@ class ResNetBlock(nn.Module):
         self.relu = nn.ReLU()
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = self.conv1(x)
         out = self.relu(out)
         residual = out
@@ -32,7 +32,7 @@ class Stack(nn.Module):
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.conv = nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.resnet_block1(x)
         x = self.resnet_block2(x)
         x = self.pool(x)
@@ -45,7 +45,7 @@ class L2Norm(nn.Module):
         super(L2Norm, self).__init__()
         self.eps = eps
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return F.normalize(x, p=2, dim=-1, eps=self.eps)
 
 
@@ -57,7 +57,7 @@ class MultiheadAttention(nn.Module):
         self.k_proj = nn.Linear(embedding_dim, embedding_dim)
         self.v_proj = nn.Linear(embedding_dim, embedding_dim)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         q = self.q_proj(x)
         k = self.k_proj(x)
         v = self.v_proj(x)
@@ -73,7 +73,7 @@ class FeedForward(nn.Module):
         )
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         mlp_output = self.mlp(x)
         return self.dropout(mlp_output)
 
@@ -90,7 +90,7 @@ class PositionalEncoding(nn.Module):
         pe[0, :, 1::2] = torch.cos(position * div_term)
         self.register_buffer("pe", pe)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x + self.pe[:, : x.size(1)]
 
 
@@ -107,7 +107,7 @@ class NormalizedTransformerBlock(nn.Module):
 
         self.norm = L2Norm()
 
-    def forward(self, h):
+    def forward(self, h: torch.Tensor) -> torch.Tensor:
         h_A = self.norm(self.attn_block(h))
         h = self.norm(h + self.alpha_A * (h_A - h))
 
@@ -132,7 +132,7 @@ class MultiheadLatentAttention(nn.Module):
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
         self.dropout = nn.Dropout(dropout) if dropout > 0.0 else None
 
-    def forward(self, x, attn_mask=None):
+    def forward(self, x: torch.Tensor, attn_mask: torch.Tensor | None = None) -> torch.Tensor:
         batch_size, seq_len, _ = x.size()
 
         Q_full = self.W_q(x)

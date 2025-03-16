@@ -10,18 +10,18 @@ from actions import convert_int_to_action
 
 
 class LFUCache:
-    def __init__(self, capacity=100):
+    def __init__(self, capacity: int = 100) -> None:
         self.capacity = capacity
         self.cache = {}
         self.usage_count = {}
 
-    def get(self, key):
+    def get(self, key: str) -> torch.Tensor | None:
         if key not in self.cache:
             return None
         self.usage_count[key] += 1
         return self.cache[key]
 
-    def put(self, key, value):
+    def put(self, key: str, value: torch.Tensor) -> None:
         if key in self.cache:
             self.cache[key] = value
             self.usage_count[key] += 1
@@ -115,7 +115,7 @@ class ChunkedNumpyDataset:
         end_time = time.time()
         print(f"Total time for Video Loading is {end_time - start_time}")
 
-    def _gather_video_metadata(self):
+    def _gather_video_metadata(self) -> None:
         for vid_id in self.video_ids:
             chunk_files = []
             video_dir = os.path.join(self.data_dir, str(vid_id))
@@ -154,7 +154,7 @@ class ChunkedNumpyDataset:
                 }
             )
 
-    def _build_indices(self):
+    def _build_indices(self) -> None:
         for vid_idx, info in enumerate(self.video_info):
             n_frames = info["num_frames"]
             stride = 16
@@ -166,7 +166,7 @@ class ChunkedNumpyDataset:
                     )
                 )
 
-    def _filter_noops(self):
+    def _filter_noops(self) -> None:
         filtered = []
         for vid_idx, start in self.sequence_indices:
             info = self.video_info[vid_idx]
@@ -177,7 +177,7 @@ class ChunkedNumpyDataset:
                 filtered.append((vid_idx, start))
         self.sequence_indices = filtered
 
-    def _filter_no_movement(self):
+    def _filter_no_movement(self) -> None:
         filtered = []
         for vid_idx, start in self.sequence_indices:
             info = self.video_info[vid_idx]
@@ -208,10 +208,10 @@ class ChunkedNumpyDataset:
                     return True
         return False
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.batches)
 
-    def _getitem(self, idx):
+    def _getitem(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         vid_idx, start_frame = self.sequence_indices[idx]
         info = self.video_info[vid_idx]
         end_frame = start_frame + self.sequence_length
@@ -222,7 +222,7 @@ class ChunkedNumpyDataset:
         label_tensor = torch.tensor(clip_labels, dtype=torch.long)
         return clip_frames, label_tensor
 
-    def _load_clip_frames(self, chunks, start_frame, end_frame):
+    def _load_clip_frames(self, chunks: list[tuple[int, int, str]], start_frame: int, end_frame: int) -> torch.Tensor:
         frames_needed = end_frame - start_frame
         current_frame = start_frame
         frames_collected = []
@@ -260,7 +260,7 @@ class ChunkedNumpyDataset:
         all_frames = torch.cat(frames_collected, dim=0)
         return all_frames
 
-    def _build_batches(self):
+    def _build_batches(self) -> None:
         i = 0
         for _ in range(0, len(self.sequence_indices), self.batch_size):
             batch = []
@@ -269,7 +269,7 @@ class ChunkedNumpyDataset:
                 i += 1
             self.batches.append(batch)
 
-    def _build_cache(self):
+    def _build_cache(self) -> None:
         used_chunks = set()
         for vid_idx, start in self.sequence_indices:
             info = self.video_info[vid_idx]
@@ -282,7 +282,7 @@ class ChunkedNumpyDataset:
             capacity=min(self.cache_capacity + 1, len(used_chunks) + 1)
         )
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         batch = self.batches[idx]
         videos, labels = zip(
             *[self._getitem(sequence_index) for sequence_index in batch]
@@ -292,7 +292,7 @@ class ChunkedNumpyDataset:
         return videos, labels
 
 
-def get_all_videos(directory_path):
+def get_all_videos(directory_path: str) -> tuple[list[str], int]:
     dirs = []
     file_count = 0
     try:
