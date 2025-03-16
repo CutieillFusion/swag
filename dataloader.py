@@ -157,8 +157,7 @@ class ChunkedNumpyDataset:
     def _build_indices(self) -> None:
         for vid_idx, info in enumerate(self.video_info):
             n_frames = info["num_frames"]
-            stride = 16
-            for start in range(0, n_frames - self.sequence_length, stride):
+            for start in range(0, n_frames - self.sequence_length, self.stride):
                 self.sequence_indices.append(
                     (
                         vid_idx,
