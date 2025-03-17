@@ -19,7 +19,6 @@ class IDM(nn.Module):
         super().__init__()
 
         self.spatial_feature_extractor = nn.Sequential(
-            nn.BatchNorm3d(input_dim[0]),
             nn.Conv3d(
                 input_dim[0],
                 spatial_channels,
@@ -27,7 +26,9 @@ class IDM(nn.Module):
                 stride=(1, 1, 1),
                 padding=(0, 0, 2),
             ),
+            nn.BatchNorm3d(spatial_channels),
             nn.ReLU(),
+            nn.Dropout(0.1),
         )
 
         feature_extractor_layers = []
@@ -58,7 +59,7 @@ class IDM(nn.Module):
 
         self.classifier = nn.Linear(embedding_dim, n_actions)
 
-        # self.pos_encoder = PositionalEncoding(embedding_dim)
+        self.pos_encoder = PositionalEncoding(embedding_dim)
 
         if freeze:
             self._freeze()
@@ -99,7 +100,7 @@ class IDM(nn.Module):
             batch_size, sequence_length, -1
         )
 
-        # x = self.pos_encoder(x)
+        x = self.pos_encoder(x)
 
         return x
 

@@ -7,7 +7,8 @@ from idm import IDM
 import torch
 from torch import nn
 from torch.nn import functional as F
-from dataloader import ChunkedNumpyDataset, get_all_videos
+from torch.utils.data import DataLoader
+from dataloader_video import VideoDataset, RandomSequentialSampler
 from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
 from actions import ACTION_SPACE, action_meanings
 import numpy as np
@@ -126,7 +127,7 @@ def save_loss_over_time(train_losses: list, val_losses: list, filename: str = "l
     plt.close()
 
 
-def compute_class_weights(dataloader: ChunkedNumpyDataset, num_classes: int, device: torch.device) -> torch.Tensor:
+def compute_class_weights(dataloader: DataLoader, num_classes: int, device: torch.device) -> torch.Tensor:
     all_labels = []
 
     for _, labels in dataloader:
@@ -150,8 +151,8 @@ def compute_class_weights(dataloader: ChunkedNumpyDataset, num_classes: int, dev
 
 def train_idm(
     model: nn.Module,
-    train_dataloader: ChunkedNumpyDataset,
-    val_dataloader: ChunkedNumpyDataset,
+    train_dataloader: DataLoader,
+    val_dataloader: DataLoader,
     num_epochs: int,
     starting_epoch: int = 0,
     learning_rate: float = 1e-5,
@@ -217,7 +218,7 @@ def train_idm(
                 continue
 
             loss.backward()
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.5)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=4.0)
             optimizer.step()
 
             training_loss += loss.item()
@@ -334,7 +335,7 @@ def train_idm(
 
 
 def measure_inference_time(
-    model: nn.Module, dataloader: ChunkedNumpyDataset, device: torch.device
+    model: nn.Module, dataloader: DataLoader, device: torch.device
 ) -> None:
     model.eval()
 
@@ -436,44 +437,49 @@ def main() -> None:
     )
     model.print_model_parameters()
 
-    dir_path = "idm/data/numpy"
-    ids, cache_capacity = get_all_videos(dir_path)
-    print(f"Upper Limit for Cache capacity {cache_capacity}")
+    data_paths = [
+        ('idm/data/raw/video_4814601.mp4', 'idm/data/raw/labels_4814601.txt'),
+        ('idm/data/raw/video_4814603.mp4', 'idm/data/raw/labels_4814603.txt'),
+        ('idm/data/raw/video_4814605.mp4', 'idm/data/raw/labels_4814605.txt'),
+        ('idm/data/raw/video_4814607.mp4', 'idm/data/raw/labels_4814607.txt'),
+        ('idm/data/raw/video_4814609.mp4', 'idm/data/raw/labels_4814609.txt'),
+        ('idm/data/raw/video_4814611.mp4', 'idm/data/raw/labels_4814611.txt'),
+        ('idm/data/raw/video_4814613.mp4', 'idm/data/raw/labels_4814613.txt'),
+        ('idm/data/raw/video_4814615.mp4', 'idm/data/raw/labels_4814615.txt'),
+        ('idm/data/raw/video_4814617.mp4', 'idm/data/raw/labels_4814617.txt'),
+        ('idm/data/raw/video_4814619.mp4', 'idm/data/raw/labels_4814619.txt'),
+        ('idm/data/raw/video_4814621.mp4', 'idm/data/raw/labels_4814621.txt'),
+        ('idm/data/raw/video_4814623.mp4', 'idm/data/raw/labels_4814623.txt'),
+        ('idm/data/raw/video_4814625.mp4', 'idm/data/raw/labels_4814625.txt'),
+        ('idm/data/raw/video_4814627.mp4', 'idm/data/raw/labels_4814627.txt'),
+        ('idm/data/raw/video_4814629.mp4', 'idm/data/raw/labels_4814629.txt'),
+        ('idm/data/raw/video_4814631.mp4', 'idm/data/raw/labels_4814631.txt'),
+    ]
 
-    training_dataset = ChunkedNumpyDataset(
-        video_ids=ids, 
-        data_dir=dir_path,
-        sequence_length=input_dims[0],
-        image_dims=(input_dims[2], input_dims[3]),
-        batch_size=args.batch_size,
-        cache_capacity=cache_capacity,
-        is_vpt=False,
-        stride=args.stride,
-    )
+    dataset = VideoDataset(data_paths, sequence_length=input_dims[0], image_dims=(input_dims[2], input_dims[3]))
 
-    validation_dataset = ChunkedNumpyDataset(
-        video_ids=[ids[13]],
-        data_dir=dir_path,
-        sequence_length=input_dims[0],
-        image_dims=(input_dims[2], input_dims[3]),
-        batch_size=args.batch_size,
-        cache_capacity=cache_capacity,
-        is_vpt=False,
-        stride=16,
-    )
+    sequence_count = len(dataset.sequence_starting_indices)
+    test_train_split = 0.8
+    test_train_split_index = int(sequence_count * test_train_split)
+
+    train_sampler = RandomSequentialSampler(dataset, start_index=0, end_index=test_train_split_index)
+    val_sampler = RandomSequentialSampler(dataset, start_index=test_train_split_index, end_index=sequence_count)
+
+    train_dataloader = DataLoader(dataset, batch_size=64, sampler=train_sampler)
+    val_dataloader = DataLoader(dataset, batch_size=64, sampler=val_sampler)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     start_time = time.time()
 
-    num_classes = len(ACTION_SPACE)
-    class_weights = compute_class_weights(training_dataset, num_classes, device)
-    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    # num_classes = len(ACTION_SPACE)
+    # class_weights = compute_class_weights(training_dataset, num_classes, device)
+    criterion = nn.CrossEntropyLoss()
 
     train_idm(
         model,
-        training_dataset,
-        validation_dataset,
+        train_dataloader,
+        val_dataloader,
         num_epochs=1000,
         learning_rate=learning_rate,
         weight_decay=weight_decay,
