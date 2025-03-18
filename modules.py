@@ -3,6 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 import math
 
+
 class ResNetBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
         super(ResNetBlock, self).__init__()
@@ -115,7 +116,8 @@ class NormalizedTransformerBlock(nn.Module):
         h = self.norm(h + self.alpha_M * (h_M - h))
 
         return h
-    
+
+
 class MultiheadLatentAttention(nn.Module):
     def __init__(self, embed_dim, num_heads, latent_dim, dropout=0.0):
         super().__init__()
@@ -132,7 +134,9 @@ class MultiheadLatentAttention(nn.Module):
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=False)
         self.dropout = nn.Dropout(dropout) if dropout > 0.0 else None
 
-    def forward(self, x: torch.Tensor, attn_mask: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, attn_mask: torch.Tensor | None = None
+    ) -> torch.Tensor:
         batch_size, seq_len, _ = x.size()
 
         Q_full = self.W_q(x)
@@ -155,7 +159,7 @@ class MultiheadLatentAttention(nn.Module):
 
         if attn_mask is not None:
             if attn_mask.dtype == torch.bool:
-                attn_scores = attn_scores.masked_fill(~attn_mask, float('-inf'))
+                attn_scores = attn_scores.masked_fill(~attn_mask, float("-inf"))
             else:
                 attn_scores = attn_scores + attn_mask
 

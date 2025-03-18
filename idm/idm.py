@@ -3,6 +3,7 @@ import torch
 from torch import nn
 from modules import Stack, PositionalEncoding, NormalizedTransformerBlock
 
+
 class IDM(nn.Module):
     def __init__(
         self,
@@ -65,12 +66,10 @@ class IDM(nn.Module):
             self._freeze()
 
     def _3d_convo(self, x: torch.Tensor) -> torch.Tensor:
-        # [B, T, C, W, H] -> [B, T, W, H, C]
         x = x.permute(0, 1, 3, 4, 2)
 
         x = self.spatial_feature_extractor(x)
-        
-        # [B, T, W, H, C] -> [B, T, C, W, H]
+
         x = x.permute(0, 1, 4, 2, 3)
         return x
 
@@ -83,9 +82,7 @@ class IDM(nn.Module):
 
         _, C_out, H_out, W_out = x.shape
 
-        x = x.view(
-            batch_size, sequence_length, C_out, H_out, W_out
-        )
+        x = x.view(batch_size, sequence_length, C_out, H_out, W_out)
 
         return x
 
@@ -96,9 +93,7 @@ class IDM(nn.Module):
 
         x = self.embedder(x)
 
-        x = x.view(
-            batch_size, sequence_length, -1
-        )
+        x = x.view(batch_size, sequence_length, -1)
 
         x = self.pos_encoder(x)
 

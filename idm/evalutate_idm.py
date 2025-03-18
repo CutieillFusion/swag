@@ -17,7 +17,9 @@ def top_k_accuracy(logits: torch.Tensor, labels: torch.Tensor, k: int = 3) -> fl
     return correct.sum().item()
 
 
-def compute_metrics(logits: torch.Tensor, labels: torch.Tensor) -> tuple[float, float, float]:
+def compute_metrics(
+    logits: torch.Tensor, labels: torch.Tensor
+) -> tuple[float, float, float]:
     probs = F.softmax(logits, dim=1)
     _, predicted = torch.max(probs, dim=1)
 
@@ -31,7 +33,9 @@ def compute_metrics(logits: torch.Tensor, labels: torch.Tensor) -> tuple[float, 
     return precision, recall, f1
 
 
-def save_confusion_matrix(all_labels: torch.Tensor, all_logits: torch.Tensor, output_dir: str) -> None:
+def save_confusion_matrix(
+    all_labels: torch.Tensor, all_logits: torch.Tensor, output_dir: str
+) -> None:
     probs = F.softmax(all_logits, dim=1)
     _, predicted = torch.max(probs, dim=1)
 
@@ -50,7 +54,7 @@ def save_confusion_matrix(all_labels: torch.Tensor, all_logits: torch.Tensor, ou
     plt.figure(figsize=(10, 7))
     sns.heatmap(
         cm_log,
-        annot=cm,   
+        annot=cm,
         fmt="d",
         cmap="Blues",
         xticklabels=top10_labels,
@@ -64,7 +68,47 @@ def save_confusion_matrix(all_labels: torch.Tensor, all_logits: torch.Tensor, ou
     plt.close()
 
 
-def save_prediction_class_histogram(all_labels: torch.Tensor, all_logits: torch.Tensor, output_dir: str) -> None:
+def save_class_histogram(
+    all_labels: torch.Tensor, all_logits: torch.Tensor, output_dir: str
+) -> None:
+    all_labels = all_labels.cpu().numpy()
+
+    unique_classes, counts = np.unique(all_labels, return_counts=True)
+
+    sorted_indices = np.argsort(unique_classes)
+    sorted_classes = unique_classes[sorted_indices]
+    sorted_counts = counts[sorted_indices]
+
+    text_labels = [action_meanings[cls] for cls in sorted_classes]
+
+    plt.figure(figsize=(14, 6))
+    bars = plt.bar(text_labels, sorted_counts, color="skyblue", width=0.6)
+
+    plt.yscale("log")
+
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height * 1.05,
+            f"{int(height)}",
+            ha="center",
+            va="bottom",
+        )
+
+    plt.xlabel("Class")
+    plt.ylabel("Number of Samples (Log Scale)")
+    plt.title("Histogram of Class Distribution (Log Scale)")
+    plt.xticks(rotation=90)
+    plt.subplots_adjust(bottom=0.3)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "class_histogram.png"))
+    plt.close()
+
+
+def save_prediction_class_accuracy_histogram(
+    all_labels: torch.Tensor, all_logits: torch.Tensor, output_dir: str
+) -> None:
     probs = F.softmax(all_logits, dim=1)
     _, predicted = torch.max(probs, dim=1)
 
@@ -74,41 +118,61 @@ def save_prediction_class_histogram(all_labels: torch.Tensor, all_logits: torch.
     correct_predictions = predicted == all_labels
 
     unique_classes = np.unique(all_labels)
+    class_counts = {cls: np.sum(all_labels == cls) for cls in unique_classes}
     correct_counts = {
         cls: np.sum(correct_predictions[all_labels == cls]) for cls in unique_classes
     }
+    accuracy_percentages = {
+        cls: (
+            (correct_counts[cls] / class_counts[cls])
+            if class_counts[cls] > 0
+            else float("nan")
+        )
+        for cls in unique_classes
+    }
 
     sorted_classes = sorted(correct_counts.keys())
-    counts = [correct_counts[cls] for cls in sorted_classes]
+    percentages = [accuracy_percentages[cls] for cls in sorted_classes]
     text_labels = [action_meanings[cls] for cls in sorted_classes]
 
-    plt.figure(figsize=(10, 6))
-    bars = plt.bar(text_labels, counts, color="skyblue")
-    
-    plt.yscale('log')
-    
-    for bar in bars:
+    plt.figure(figsize=(14, 6))
+    bars = plt.bar(text_labels, percentages, color="skyblue", width=0.6)
+
+    for bar, cls in zip(bars, sorted_classes):
         height = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width() / 2.0, height*1.05,
-                 f'{int(height)}', ha='center', va='bottom')
-    
+        if np.isnan(height):
+            plt.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                0.5,
+                "N/A",
+                ha="center",
+                va="bottom",
+            )
+        else:
+            plt.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                height,
+                f"{height:.3f}",
+                ha="center",
+                va="bottom",
+            )
+
     plt.xlabel("Class")
-    plt.ylabel("Number of Correct Predictions (Log Scale)")
-    plt.title("Histogram of Correct Predictions per Class (Log Scale)")
+    plt.ylabel("Accuracy")
+    plt.title("Accuracy per Class")
     plt.xticks(rotation=90)
+    plt.ylim(0, 1.05)
     plt.subplots_adjust(bottom=0.3)
-    plt.savefig(os.path.join(output_dir, "prediction_class_histogram.png"))
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "prediction_class_accuracy_histogram.png"))
     plt.close()
 
 
 def evaluate_model(
-    model: IDM,
-    test_dataloader: ChunkedNumpyDataset,
-    device: torch.device,
-    output_dir: str
+    model: IDM, dataset: ChunkedNumpyDataset, device: torch.device, output_dir: str
 ) -> None:
     model.eval()
-    
+
     test_correct_predictions_top1 = 0
     test_correct_predictions_top3 = 0
     test_total_predictions = 0
@@ -116,7 +180,7 @@ def evaluate_model(
     test_all_labels = []
 
     with torch.no_grad():
-        for videos, labels in test_dataloader:
+        for videos, labels in dataset.set_mode("val"):
             videos, labels = videos.to(device), labels.to(device)
 
             logits = model(videos)
@@ -156,11 +220,12 @@ def evaluate_model(
     print(f"Recall: {test_recall:.4f}")
     print(f"F1 Score: {test_f1:.4f}")
 
-    # Save visualizations
     save_confusion_matrix(test_all_labels, test_all_logits, output_dir)
-    save_prediction_class_histogram(test_all_labels, test_all_logits, output_dir)
+    save_class_histogram(test_all_labels, test_all_logits, output_dir)
+    save_prediction_class_accuracy_histogram(
+        test_all_labels, test_all_logits, output_dir
+    )
 
-    # Save metrics to file
     with open(os.path.join(output_dir, "evaluation_results.txt"), "w") as f:
         f.write(f"Test Results:\n")
         f.write(f"Top-1 Accuracy: {test_top1_accuracy:.2f}%\n")
@@ -172,35 +237,59 @@ def evaluate_model(
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate IDM model")
-    parser.add_argument("--model_path", type=str, required=True, help="Path to the trained model")
-    parser.add_argument("--output_dir", type=str, default="idm", help="Directory to save evaluation results")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch size for evaluation")
-    parser.add_argument("--stride", type=int, default=16, help="Stride for evaluation")
-    parser.add_argument("--x", type=int, default=32, help="Dimension of x")
-    parser.add_argument("--y", type=int, default=30, help="Dimension of y")
-    parser.add_argument("--feature_channels", type=str, default="32,64,64", help="Comma-separated list of feature channels")
-    parser.add_argument("--embedding_dim", type=int, default=256, help="Dimension of embeddings")
-    parser.add_argument("--ff_dim", type=int, default=256, help="Dimension of feed-forward networks in transformer")
-    parser.add_argument("--transformer_heads", type=int, default=4, help="Number of attention heads in transformer")
-    parser.add_argument("--transformer_blocks", type=int, default=1, help="Number of transformer blocks")
+    parser.add_argument(
+        "--model_path", type=str, required=True, help="Path to the trained model"
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="idm/results",
+        help="Directory to save evaluation results",
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=1, help="Batch size for evaluation"
+    )
+    parser.add_argument("--stride", type=int, default=32, help="Stride for evaluation")
+    parser.add_argument("--x", type=int, default=64, help="Dimension of x")
+    parser.add_argument("--y", type=int, default=60, help="Dimension of y")
+    parser.add_argument(
+        "--feature_channels",
+        type=str,
+        default="32,64,64",
+        help="Comma-separated list of feature channels",
+    )
+    parser.add_argument(
+        "--embedding_dim", type=int, default=512, help="Dimension of embeddings"
+    )
+    parser.add_argument(
+        "--ff_dim",
+        type=int,
+        default=512,
+        help="Dimension of feed-forward networks in transformer",
+    )
+    parser.add_argument(
+        "--transformer_heads",
+        type=int,
+        default=4,
+        help="Number of attention heads in transformer",
+    )
+    parser.add_argument(
+        "--transformer_blocks", type=int, default=2, help="Number of transformer blocks"
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_arguments()
-    
-    # Create output directory
+
     os.makedirs(args.output_dir, exist_ok=True)
-    
-    # Set device
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    
-    # Model configuration
+
     input_dims = (64, 3, args.y, args.x)
     feature_channels = list(map(int, args.feature_channels.split(",")))
-    
-    # Initialize model
+
     model = IDM(
         n_actions=len(ACTION_SPACE),
         input_dim=input_dims,
@@ -210,16 +299,14 @@ def main() -> None:
         ff_dim=args.ff_dim,
         embedding_dim=args.embedding_dim,
     )
-    
-    # Load model weights
+
     model.load_model(args.model_path)
     model = model.to(device)
-    
-    # Prepare test dataset
+
     dir_path = "idm/data/numpy"
     ids, cache_capacity = get_all_videos(dir_path)
-    
-    test_dataset = ChunkedNumpyDataset(
+
+    dataset = ChunkedNumpyDataset(
         video_ids=ids,
         data_dir=dir_path,
         sequence_length=input_dims[0],
@@ -228,11 +315,11 @@ def main() -> None:
         cache_capacity=cache_capacity,
         is_vpt=False,
         stride=args.stride,
+        data_splits={"val": 1.0},
     )
-    
-    # Evaluate model
-    evaluate_model(model, test_dataset, device, args.output_dir)
-    
+
+    evaluate_model(model, dataset, device, args.output_dir)
+
     print(f"Evaluation complete. Results saved to {args.output_dir}")
 
 

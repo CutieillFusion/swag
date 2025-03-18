@@ -1,3 +1,4 @@
+import __future__
 import os
 import re
 import random
@@ -38,16 +39,17 @@ class LFUCache:
 class ChunkedNumpyDataset:
     def __init__(
         self,
-        video_ids,
-        data_dir,
-        sequence_length=64,
-        image_dims=(60, 64),
-        batch_size=8,
-        noop_label=27,
-        noop_threshold=32,
-        cache_capacity=100,
-        is_vpt=False,
-        stride=16,
+        video_ids: list[str],
+        data_dir: str,
+        sequence_length: int = 64,
+        image_dims: tuple[int, int] = (60, 64),
+        batch_size: int = 8,
+        noop_label: int = 27,
+        noop_threshold: int = 32,
+        cache_capacity: int = 100,
+        is_vpt: bool = False,
+        stride: int = 16,
+        data_splits: dict[str, float] = {"train": 0.8, "val": 0.2},
     ):
         self.video_ids = video_ids
         self.data_dir = data_dir
@@ -88,13 +90,15 @@ class ChunkedNumpyDataset:
             convert_int_to_action(movement_class)
             for movement_class in self.movement_classes
         ]
+        self.data_splits = data_splits
+        assert sum(data_splits.values()) == 1, "Data splits must sum to 1"
         start_time = time.time()
 
         self.cache_capacity = cache_capacity
 
         self.video_info = []
         self.sequence_indices = []
-        self.batches = []
+        self.batches = {}
 
         self._gather_video_metadata()
         print(f"Total videos processed: {len(self.video_info)}")
@@ -106,14 +110,20 @@ class ChunkedNumpyDataset:
         # print(
         #     f"Total sequences after no movement removal: {len(self.sequence_indices)}"
         # )
-        # random.shuffle(self.sequence_indices)
+        random.shuffle(self.sequence_indices)
 
         self._build_batches()
 
         self._build_cache()
 
+        self.mode = "train"
+
         end_time = time.time()
         print(f"Total time for Video Loading is {end_time - start_time}")
+
+    def set_mode(self, mode: str) -> "ChunkedNumpyDataset":
+        self.mode = mode
+        return self
 
     def _gather_video_metadata(self) -> None:
         for vid_id in self.video_ids:
@@ -208,7 +218,7 @@ class ChunkedNumpyDataset:
         return False
 
     def __len__(self) -> int:
-        return len(self.batches)
+        return len(self.batches[self.mode])
 
     def _getitem(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         vid_idx, start_frame = self.sequence_indices[idx]
@@ -221,7 +231,9 @@ class ChunkedNumpyDataset:
         label_tensor = torch.tensor(clip_labels, dtype=torch.long)
         return clip_frames, label_tensor
 
-    def _load_clip_frames(self, chunks: list[tuple[int, int, str]], start_frame: int, end_frame: int) -> torch.Tensor:
+    def _load_clip_frames(
+        self, chunks: list[tuple[int, int, str]], start_frame: int, end_frame: int
+    ) -> torch.Tensor:
         frames_needed = end_frame - start_frame
         current_frame = start_frame
         frames_collected = []
@@ -241,7 +253,7 @@ class ChunkedNumpyDataset:
                 chunk_tensor = F.interpolate(
                     chunk_tensor,
                     size=(self.image_dims[0], self.image_dims[1]),
-                    mode="area"
+                    mode="area",
                 )
                 chunk_tensor = chunk_tensor / 255.0
                 self.chunk_cache.put(chunk_path, chunk_tensor)
@@ -261,12 +273,20 @@ class ChunkedNumpyDataset:
 
     def _build_batches(self) -> None:
         i = 0
+        batches = []
         for _ in range(0, len(self.sequence_indices), self.batch_size):
             batch = []
             for _ in range(self.batch_size):
                 batch.append(i)
                 i += 1
-            self.batches.append(batch)
+            batches.append(batch)
+
+        batch_count = len(batches)
+        for split_name, split_ratio in self.data_splits.items():
+            split_size = int(batch_count * split_ratio)
+            split_batches = batches[:split_size]
+            batches = batches[split_size:]
+            self.batches[split_name] = split_batches
 
     def _build_cache(self) -> None:
         used_chunks = set()
@@ -282,7 +302,7 @@ class ChunkedNumpyDataset:
         )
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        batch = self.batches[idx]
+        batch = self.batches[self.mode][idx]
         videos, labels = zip(
             *[self._getitem(sequence_index) for sequence_index in batch]
         )
@@ -312,7 +332,7 @@ def get_all_videos(directory_path: str) -> tuple[list[str], int]:
         print(f"Error: '{directory_path}' is not a directory.")
 
     random.shuffle(dirs)
-    
+
     return dirs, file_count
 
 
@@ -330,17 +350,13 @@ if __name__ == "__main__":
         image_dims=(240, 256),
         batch_size=8,
         cache_capacity=cache_capacity,
+        data_splits={"train": 1},
+        stride=16,
     )
 
     start_time = time.time()
     for i, (video, label) in enumerate(video_dataset):
-        # Save the first frame of the first video in the batch
-        for j in range(video.size(1)):
-            first_frame = video[7][j].cpu().numpy().transpose(1, 2, 0)  # Convert from CxHxW to HxWxC
-            first_frame = (first_frame * 255).astype(np.uint8)
-            cv2.imwrite(f'frame_{j}_{label[7][j]}.png', first_frame)
-            print(f"Frame {j} saved to 'frame_{j}_{label[7][j]}.png'")
-        break
+        pass
     end_time = time.time()
     print(
         f"Total time for {len(video_dataset) * video_dataset.batch_size} Loads is {end_time - start_time}"
@@ -349,13 +365,13 @@ if __name__ == "__main__":
         f"Average time for loading is {(end_time - start_time) / (len(video_dataset) * video_dataset.batch_size)}"
     )
 
-    # start_time = time.time()
-    # for i, (video, label) in enumerate(video_dataset):
-    #     pass
-    # end_time = time.time()
-    # print(
-    #     f"Total time for {len(video_dataset) * video_dataset.batch_size} Loads is {end_time - start_time}"
-    # )
-    # print(
-    #     f"Average time for loading is {(end_time - start_time) / (len(video_dataset) * video_dataset.batch_size)}"
-    # )
+    start_time = time.time()
+    for i, (video, label) in enumerate(video_dataset):
+        pass
+    end_time = time.time()
+    print(
+        f"Total time for {len(video_dataset) * video_dataset.batch_size} Loads is {end_time - start_time}"
+    )
+    print(
+        f"Average time for loading is {(end_time - start_time) / (len(video_dataset) * video_dataset.batch_size)}"
+    )

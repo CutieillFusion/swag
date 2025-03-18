@@ -21,7 +21,9 @@ def top_k_accuracy(logits: torch.Tensor, labels: torch.Tensor, k: int = 3) -> fl
     return correct.sum().item()
 
 
-def compute_metrics(logits: torch.Tensor, labels: torch.Tensor) -> tuple[float, float, float]:
+def compute_metrics(
+    logits: torch.Tensor, labels: torch.Tensor
+) -> tuple[float, float, float]:
     probs = F.softmax(logits, dim=1)
 
     _, predicted = torch.max(probs, dim=1)
@@ -36,7 +38,11 @@ def compute_metrics(logits: torch.Tensor, labels: torch.Tensor) -> tuple[float, 
     return precision, recall, f1
 
 
-def save_confusion_matrix(all_labels: torch.Tensor, all_logits: torch.Tensor, filename: str = "confusion_matrix.png") -> None:
+def save_confusion_matrix(
+    all_labels: torch.Tensor,
+    all_logits: torch.Tensor,
+    filename: str = "confusion_matrix.png",
+) -> None:
     probs = torch.nn.functional.softmax(all_logits, dim=1)
     _, predicted = torch.max(probs, dim=1)
 
@@ -56,7 +62,7 @@ def save_confusion_matrix(all_labels: torch.Tensor, all_logits: torch.Tensor, fi
     plt.figure(figsize=(10, 7))
     sns.heatmap(
         cm_log,
-        annot=cm,   
+        annot=cm,
         fmt="d",
         cmap="Blues",
         xticklabels=top10_labels,
@@ -70,63 +76,28 @@ def save_confusion_matrix(all_labels: torch.Tensor, all_logits: torch.Tensor, fi
     plt.close()
 
 
-def save_prediction_class_histogram(
-    all_labels: torch.Tensor, all_logits: torch.Tensor, filename: str = "prediction_class_histogram.png"
+def save_loss_over_time(
+    train_losses: list, val_losses: list, filename: str = "loss_over_time.png"
 ) -> None:
-    probs = torch.nn.functional.softmax(all_logits, dim=1)
-    _, predicted = torch.max(probs, dim=1)
-
-    all_labels = all_labels.cpu().numpy()
-    predicted = predicted.cpu().numpy()
-
-    correct_predictions = predicted == all_labels
-
-    unique_classes = np.unique(all_labels)
-    correct_counts = {
-        cls: np.sum(correct_predictions[all_labels == cls]) for cls in unique_classes
-    }
-
-    sorted_classes = sorted(correct_counts.keys())
-    counts = [correct_counts[cls] for cls in sorted_classes]
-    text_labels = [action_meanings[cls] for cls in sorted_classes]
-
-    plt.figure(figsize=(10, 6))
-    bars = plt.bar(text_labels, counts, color="skyblue")
-    
-    plt.yscale('log')
-    
-    for bar in bars:
-        height = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width() / 2.0, height*1.05,
-                 f'{int(height)}', ha='center', va='bottom')
-    
-    plt.xlabel("Class")
-    plt.ylabel("Number of Correct Predictions (Log Scale)")
-    plt.title("Histogram of Correct Predictions per Class (Log Scale)")
-    plt.xticks(rotation=90)
-    plt.subplots_adjust(bottom=0.3)
-    plt.savefig(filename)
-    plt.close()
-
-
-def save_loss_over_time(train_losses: list, val_losses: list, filename: str = "loss_over_time.png") -> None:
     plt.figure(figsize=(10, 6))
     epochs = range(1, len(train_losses) + 1)
-    
-    plt.plot(epochs, train_losses, 'b-', label='Training Loss')
-    plt.plot(epochs, val_losses, 'r-', label='Validation Loss')
-    
-    plt.title('Training and Validation Loss Over Time')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
+
+    plt.plot(epochs, train_losses, "b-", label="Training Loss")
+    plt.plot(epochs, val_losses, "r-", label="Validation Loss")
+
+    plt.title("Training and Validation Loss Over Time")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
     plt.legend()
     plt.grid(True)
-    
+
     plt.savefig(filename)
     plt.close()
 
 
-def compute_class_weights(dataloader: ChunkedNumpyDataset, num_classes: int, device: torch.device) -> torch.Tensor:
+def compute_class_weights(
+    dataloader: ChunkedNumpyDataset, num_classes: int, device: torch.device
+) -> torch.Tensor:
     all_labels = []
 
     for _, labels in dataloader:
@@ -150,8 +121,7 @@ def compute_class_weights(dataloader: ChunkedNumpyDataset, num_classes: int, dev
 
 def train_idm(
     model: nn.Module,
-    train_dataloader: ChunkedNumpyDataset,
-    val_dataloader: ChunkedNumpyDataset,
+    dataset: ChunkedNumpyDataset,
     num_epochs: int,
     starting_epoch: int = 0,
     learning_rate: float = 1e-5,
@@ -175,8 +145,7 @@ def train_idm(
     patience_counter = 0
 
     current_epoch = 0
-    
-    # Lists to track losses over time
+
     train_losses = []
     val_losses = []
 
@@ -191,7 +160,7 @@ def train_idm(
         all_logits = []
         all_labels = []
 
-        for videos, labels in train_dataloader:
+        for videos, labels in dataset.set_mode("train"):
             videos, labels = videos.to(device), labels.to(device)
 
             optimizer.zero_grad()
@@ -217,7 +186,6 @@ def train_idm(
                 continue
 
             loss.backward()
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.5)
             optimizer.step()
 
             training_loss += loss.item()
@@ -236,7 +204,7 @@ def train_idm(
 
         train_top1_accuracy = 100 * correct_predictions_top1 / total_predictions
         train_top3_accuracy = 100 * correct_predictions_top3 / total_predictions
-        training_loss = training_loss / len(train_dataloader)
+        training_loss = training_loss / len(dataset.set_mode("train"))
         train_losses.append(training_loss)
 
         model.eval()
@@ -248,7 +216,7 @@ def train_idm(
         val_all_labels = []
 
         with torch.no_grad():
-            for videos, labels in val_dataloader:
+            for videos, labels in dataset.set_mode("val"):
                 videos, labels = videos.to(device), labels.to(device)
 
                 logits = model(videos)
@@ -283,7 +251,7 @@ def train_idm(
 
         val_top1_accuracy = 100 * val_correct_predictions_top1 / val_total_predictions
         val_top3_accuracy = 100 * val_correct_predictions_top3 / val_total_predictions
-        val_loss = val_loss / len(val_dataloader)
+        val_loss = val_loss / len(dataset.set_mode("val"))
         val_losses.append(val_loss)
 
         print(
@@ -306,13 +274,9 @@ def train_idm(
             else:
                 best_model = model
             best_model.save_model(f"{model_path}/best_model.pt")
-            save_prediction_class_histogram(
-                all_labels, all_logits, filename=f"{model_path}/prediction_class_histogram.png"
-            )
             save_confusion_matrix(
                 all_labels, all_logits, filename=f"{model_path}/confusion_matrix.png"
             )
-            # Save loss graph at each best model checkpoint
             save_loss_over_time(
                 train_losses, val_losses, filename=f"{model_path}/loss_over_time.png"
             )
@@ -321,13 +285,12 @@ def train_idm(
             if patience_counter >= patience:
                 print(f"Early stopping at epoch {current_epoch}")
                 break
-    
-    # Save final loss graph at the end of training
+
     model_path = os.path.join("idm/models", str(job_id))
     save_loss_over_time(
         train_losses, val_losses, filename=f"{model_path}/final_loss_over_time.png"
     )
-    
+
     print("Training complete.")
     print(f"[Best Epoch {best_val_loss_result}")
     return current_epoch
@@ -396,11 +359,10 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--batch_size", type=int, default=8, help="Batch size for training"
     )
-    parser.add_argument(
-        "--stride", type=int, default=16, help="Stride for training"
-    )
+    parser.add_argument("--stride", type=int, default=16, help="Stride for training")
     args = parser.parse_args()
     return args
+
 
 def main() -> None:
     args = parse_arguments()
@@ -440,8 +402,8 @@ def main() -> None:
     ids, cache_capacity = get_all_videos(dir_path)
     print(f"Upper Limit for Cache capacity {cache_capacity}")
 
-    training_dataset = ChunkedNumpyDataset(
-        video_ids=ids, 
+    dataset = ChunkedNumpyDataset(
+        video_ids=ids,
         data_dir=dir_path,
         sequence_length=input_dims[0],
         image_dims=(input_dims[2], input_dims[3]),
@@ -451,29 +413,17 @@ def main() -> None:
         stride=args.stride,
     )
 
-    validation_dataset = ChunkedNumpyDataset(
-        video_ids=[ids[13]],
-        data_dir=dir_path,
-        sequence_length=input_dims[0],
-        image_dims=(input_dims[2], input_dims[3]),
-        batch_size=args.batch_size,
-        cache_capacity=cache_capacity,
-        is_vpt=False,
-        stride=16,
-    )
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     start_time = time.time()
 
     num_classes = len(ACTION_SPACE)
-    class_weights = compute_class_weights(training_dataset, num_classes, device)
+    class_weights = compute_class_weights(dataset, num_classes, device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     train_idm(
         model,
-        training_dataset,
-        validation_dataset,
+        dataset,
         num_epochs=1000,
         learning_rate=learning_rate,
         weight_decay=weight_decay,

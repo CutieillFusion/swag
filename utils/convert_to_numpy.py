@@ -5,6 +5,7 @@ import os
 import shutil
 import time
 
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Convert a video to numpy sequences")
     parser.add_argument(
@@ -53,7 +54,10 @@ def main():
     args = parse_arguments()
     frames = []
 
-    if os.path.exists(os.path.join(args.output_dir, f"{args.video_id}/labels.txt")) and not args.labels:
+    if (
+        os.path.exists(os.path.join(args.output_dir, f"{args.video_id}/labels.txt"))
+        and not args.labels
+    ):
         print(f"Video id {args.video_id} already Finished")
         return
 
@@ -117,14 +121,18 @@ def main():
         np.save(output_path, sequence)
 
     if args.labels:
-        with open(os.path.join(args.input_dir, f"labels_{args.video_id}.txt"), "r") as f:
+        with open(
+            os.path.join(args.input_dir, f"labels_{args.video_id}.txt"), "r"
+        ) as f:
             labels = f.readlines()
 
         sampled_labels = labels[::frame_skip_interval]
 
-        with open(os.path.join(args.output_dir, f"{args.video_id}/labels.txt"), "w") as f:
+        with open(
+            os.path.join(args.output_dir, f"{args.video_id}/labels.txt"), "w"
+        ) as f:
             f.writelines(sampled_labels)
-            
+
     elapsed_time = time.time() - start_time
 
     print(f"Saved {saved_frames} frames to numpy sequences")
