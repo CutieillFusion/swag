@@ -210,6 +210,31 @@ def evaluate_model(
         test_all_logits, test_all_labels
     )
 
+    all_preds = torch.argmax(test_all_logits, dim=1).cpu().numpy()
+    all_labels_np = test_all_labels.cpu().numpy()
+    unique_classes = np.unique(all_labels_np)
+
+    class_precision = []
+    class_recall = []
+    class_f1 = []
+    
+    for cls in unique_classes:
+        true_positives = np.sum((all_preds == cls) & (all_labels_np == cls))
+        false_positives = np.sum((all_preds == cls) & (all_labels_np != cls))
+        false_negatives = np.sum((all_preds != cls) & (all_labels_np == cls))
+        
+        precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
+        recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+        
+        class_precision.append(precision)
+        class_recall.append(recall)
+        class_f1.append(f1)
+    
+    macro_precision = np.mean(class_precision)
+    macro_recall = np.mean(class_recall)
+    macro_f1 = np.mean(class_f1)
+
     test_top1_accuracy = 100 * test_correct_predictions_top1 / test_total_predictions
     test_top3_accuracy = 100 * test_correct_predictions_top3 / test_total_predictions
 
@@ -219,6 +244,9 @@ def evaluate_model(
     print(f"Precision: {test_precision:.4f}")
     print(f"Recall: {test_recall:.4f}")
     print(f"F1 Score: {test_f1:.4f}")
+    print(f"Macro-Precision: {macro_precision:.4f}")
+    print(f"Macro-Recall: {macro_recall:.4f}")
+    print(f"Macro-F1 Score: {macro_f1:.4f}")
 
     save_confusion_matrix(test_all_labels, test_all_logits, output_dir)
     save_class_histogram(test_all_labels, test_all_logits, output_dir)
@@ -233,6 +261,9 @@ def evaluate_model(
         f.write(f"Precision: {test_precision:.4f}\n")
         f.write(f"Recall: {test_recall:.4f}\n")
         f.write(f"F1 Score: {test_f1:.4f}\n")
+        f.write(f"Macro-Precision: {macro_precision:.4f}\n")
+        f.write(f"Macro-Recall: {macro_recall:.4f}\n")
+        f.write(f"Macro-F1 Score: {macro_f1:.4f}\n")
 
 
 def parse_arguments() -> argparse.Namespace:

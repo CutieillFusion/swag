@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=SWAG_1
+#SBATCH --job-name=RL_DYLAN
 #SBATCH --output=slurm/misc/%j.out
 #SBATCH --error=slurm/misc/%j.err
 #SBATCH --nodes=1

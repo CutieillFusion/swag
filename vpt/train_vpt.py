@@ -3,7 +3,7 @@ from sklearn.utils.class_weight import compute_class_weight
 import torch
 import os
 import time
-from idm import IDM
+from vpt import VPT
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -119,7 +119,7 @@ def compute_class_weights(
     return torch.tensor(class_weights, dtype=torch.float).to(device)
 
 
-def train_idm(
+def train_vpt(
     model: nn.Module,
     dataset: ChunkedNumpyDataset,
     num_epochs: int,
@@ -168,8 +168,8 @@ def train_idm(
             logits = model(videos)
 
             if logits.size(1) > 32 and labels.size(0) > 32:
-                logits = logits[:, 16:-16, :]
-                labels = labels[:, 16:-16]
+                logits = logits[:, 32:, :]
+                labels = labels[:, 32:]
 
             logits = logits.reshape(-1, logits.size(-1))
             labels = labels.reshape(-1)
@@ -222,8 +222,8 @@ def train_idm(
                 logits = model(videos)
 
                 if logits.size(1) > 32 and labels.size(0) > 32:
-                    logits = logits[:, 16:-16, :]
-                    labels = labels[:, 16:-16]
+                    logits = logits[:, 32:, :]
+                    labels = labels[:, 32:]
 
                 logits = logits.reshape(-1, logits.size(-1))
                 labels = labels.reshape(-1)
@@ -267,7 +267,7 @@ def train_idm(
             best_val_loss_result = f"Epoch [{current_epoch}/{num_epochs}] Validation Loss: {val_loss:.4f}, Validation Top-1 Accuracy: {val_top1_accuracy:.2f}%, Validation Top-3 Accuracy: {val_top3_accuracy:.2f}%, Validation Precision: {val_precision:.2f}, Validation Recall: {val_recall:.2f}, Validation F1: {val_f1:.2f}"
             best_val_loss = val_loss
             patience_counter = 0
-            model_path = os.path.join("idm/models", str(job_id))
+            model_path = os.path.join("vpt/models", str(job_id))
             os.makedirs(model_path, exist_ok=True)
             if isinstance(model, torch.nn.DataParallel):
                 best_model = model.module
@@ -286,7 +286,7 @@ def train_idm(
                 print(f"Early stopping at epoch {current_epoch}")
                 break
 
-    model_path = os.path.join("idm/models", str(job_id))
+    model_path = os.path.join("vpt/models", str(job_id))
     save_loss_over_time(
         train_losses, val_losses, filename=f"{model_path}/final_loss_over_time.png"
     )
@@ -367,7 +367,7 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> None:
     args = parse_arguments()
 
-    model_path = os.path.join("idm/models", str(args.job_id))
+    model_path = os.path.join("vpt/models", str(args.job_id))
     os.makedirs(model_path, exist_ok=True)
 
     input_dims = (64, 3, args.y, args.x)
@@ -387,7 +387,7 @@ def main() -> None:
     weight_decay = args.weight_decay
     print(f"Weight Decay {weight_decay}")
 
-    model = IDM(
+    model = VPT(
         n_actions=len(ACTION_SPACE),
         input_dim=input_dims,
         feature_channels=feature_channels,
@@ -409,19 +409,20 @@ def main() -> None:
         image_dims=(input_dims[2], input_dims[3]),
         batch_size=args.batch_size,
         cache_capacity=cache_capacity,
-        is_vpt=False,
+        is_vpt=True,
         stride=args.stride,
+        data_splits={"train": 0.8, "val": 0.2},
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     start_time = time.time()
 
-    # num_classes = len(ACTION_SPACE)
-    # class_weights = compute_class_weights(dataset, num_classes, device)
-    criterion = nn.CrossEntropyLoss()
+    num_classes = len(ACTION_SPACE)
+    class_weights = compute_class_weights(dataset, num_classes, device)
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
 
-    train_idm(
+    train_vpt(
         model,
         dataset,
         num_epochs=1000,

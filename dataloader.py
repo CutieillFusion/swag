@@ -225,7 +225,11 @@ class ChunkedNumpyDataset:
         info = self.video_info[vid_idx]
         end_frame = start_frame + self.sequence_length
 
-        clip_labels = info["labels"][start_frame:end_frame]
+        clip_labels = info["labels"][
+            (start_frame + 1) if self.is_vpt else start_frame : (
+                (end_frame + 1) if self.is_vpt else end_frame
+            )
+        ]
         clip_frames = self._load_clip_frames(info["chunks"], start_frame, end_frame)
 
         label_tensor = torch.tensor(clip_labels, dtype=torch.long)

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=SWAG_3
+#SBATCH --job-name=RL_DYLAN
 #SBATCH --output=slurm/idm/%j.out
 #SBATCH --error=slurm/idm/%j.err
 #SBATCH --nodes=1
@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=40
 #SBATCH --gres=gpu:1
 #SBATCH --time=7-00:00:00
-#SBATCH --mem=200GB
+#SBATCH --mem=450GB
 
 cd /data/ai_club/nes_2025/swag
 
