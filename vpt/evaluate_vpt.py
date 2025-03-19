@@ -3,12 +3,12 @@ import torch
 import os
 import numpy as np
 from torch.nn import functional as F
-from idm import IDM
 from dataloader import ChunkedNumpyDataset, get_all_videos
 from actions import ACTION_SPACE, action_meanings
 from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
+from vpt import VPT
 
 
 def top_k_accuracy(logits: torch.Tensor, labels: torch.Tensor, k: int = 3) -> float:
@@ -69,7 +69,7 @@ def save_confusion_matrix(
 
 
 def save_class_histogram(
-    all_labels: torch.Tensor, output_dir: str
+    all_labels: torch.Tensor, all_logits: torch.Tensor, output_dir: str
 ) -> None:
     all_labels = all_labels.cpu().numpy()
 
@@ -169,7 +169,7 @@ def save_prediction_class_accuracy_histogram(
 
 
 def evaluate_model(
-    model: IDM, dataset: ChunkedNumpyDataset, device: torch.device, output_dir: str
+    model: VPT, dataset: ChunkedNumpyDataset, device: torch.device, output_dir: str
 ) -> None:
     model.eval()
 
@@ -221,7 +221,7 @@ def evaluate_model(
     print(f"F1 Score: {test_f1:.4f}")
 
     save_confusion_matrix(test_all_labels, test_all_logits, output_dir)
-    save_class_histogram(test_all_labels, output_dir)
+    save_class_histogram(test_all_labels, test_all_logits, output_dir)
     save_prediction_class_accuracy_histogram(
         test_all_labels, test_all_logits, output_dir
     )
@@ -236,14 +236,14 @@ def evaluate_model(
 
 
 def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate IDM model")
+    parser = argparse.ArgumentParser(description="Evaluate VPT model")
     parser.add_argument(
         "--model_path", type=str, required=True, help="Path to the trained model"
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="idm/results",
+        default="vpt/results",
         help="Directory to save evaluation results",
     )
     parser.add_argument(
@@ -290,7 +290,7 @@ def main() -> None:
     input_dims = (64, 3, args.y, args.x)
     feature_channels = list(map(int, args.feature_channels.split(",")))
 
-    model = IDM(
+    model = VPT(
         n_actions=len(ACTION_SPACE),
         input_dim=input_dims,
         feature_channels=feature_channels,
@@ -313,7 +313,7 @@ def main() -> None:
         image_dims=(input_dims[2], input_dims[3]),
         batch_size=args.batch_size,
         cache_capacity=cache_capacity,
-        is_vpt=False,
+        is_vpt=True,
         stride=args.stride,
         data_splits={"val": 1.0},
     )

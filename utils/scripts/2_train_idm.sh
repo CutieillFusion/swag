@@ -27,7 +27,7 @@ export PYTHONPATH=/data/ai_club/nes_2025/swag:$PYTHONPATH
     --weight_decay $8 \
     --feature_channels $9
 
-# sbatch utils/scripts/2_train_idm.sh 512 512 2 4 64 60 0.0002147 0.000001 32,64,64
+# sbatch utils/scripts/2_train_idm.sh 512 2048 2 4 64 60 0.0002147 0.000001 32,64,64
 # /data/ai_club/nes_2025/swag/.venv/bin/python idm/train_idm.py \
 #    --job_id 2 \
 #    --embedding_dim 512 \

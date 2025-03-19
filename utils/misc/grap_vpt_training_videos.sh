@@ -1,3 +1,5 @@
+#!/bin/bash
+
 mapfile -t ids < utils/misc/vpt_video_ids.txt
 
 for id in "${ids[@]}"; do

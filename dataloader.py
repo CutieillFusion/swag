@@ -2,7 +2,7 @@ import __future__
 import os
 import re
 import random
-import cv2
+from typing import Optional, Tuple
 import torch
 import numpy as np
 import torch.nn.functional as F
@@ -35,6 +35,32 @@ class LFUCache:
             del self.cache[least_used]
             del self.usage_count[least_used]
 
+class LRUCache:
+    def __init__(self, capacity: int = 100) -> None:
+        self.capacity = capacity
+        self.cache = {}
+        self.usage_order = []
+
+    def get(self, key: str) -> torch.Tensor | None:
+        if key not in self.cache:
+            return None
+        self.usage_order.remove(key)
+        self.usage_order.append(key)
+        return self.cache[key]
+
+    def put(self, key: str, value: torch.Tensor) -> None:
+        if key in self.cache:
+            self.cache[key] = value
+            self.usage_order.remove(key)
+            self.usage_order.append(key)
+        else:
+            self.cache[key] = value
+            self.usage_order.append(key)
+
+        if len(self.cache) > self.capacity:
+            lru_key = self.usage_order.pop(0)
+            del self.cache[lru_key]
+
 
 class ChunkedNumpyDataset:
     def __init__(
@@ -47,7 +73,9 @@ class ChunkedNumpyDataset:
         noop_label: int = 27,
         noop_threshold: int = 32,
         cache_capacity: int = 100,
+        cache_type: str = "lfu",
         is_vpt: bool = False,
+        has_labels: bool = True,
         stride: int = 16,
         data_splits: dict[str, float] = {"train": 0.8, "val": 0.2},
     ):
@@ -60,6 +88,7 @@ class ChunkedNumpyDataset:
         self.noop_threshold = noop_threshold
         self.stride = stride
         self.is_vpt = is_vpt
+        self.has_labels = has_labels
         self.movement_classes = [
             67,
             131,
@@ -95,6 +124,7 @@ class ChunkedNumpyDataset:
         start_time = time.time()
 
         self.cache_capacity = cache_capacity
+        self.cache_type = cache_type
 
         self.video_info = []
         self.sequence_indices = []
@@ -103,20 +133,19 @@ class ChunkedNumpyDataset:
         self._gather_video_metadata()
         print(f"Total videos processed: {len(self.video_info)}")
         self._build_indices()
-        print(f"Total sequences before noop removal: {len(self.sequence_indices)}")
-        self._filter_noops()
-        print(f"Total sequences after noop removal: {len(self.sequence_indices)}")
-        # self._filter_no_movement()
-        # print(
-        #     f"Total sequences after no movement removal: {len(self.sequence_indices)}"
-        # )
-        random.shuffle(self.sequence_indices)
+        print(f"Total sequences: {len(self.sequence_indices)}")
+        if self.has_labels:
+            self._filter_noops()
+            print(f"Total sequences after noop removal: {len(self.sequence_indices)}")
+            # self._filter_no_movement()
+            # print(
+            #     f"Total sequences after no movement removal: {len(self.sequence_indices)}"
+            # )
+            random.shuffle(self.sequence_indices)
 
         self._build_batches()
 
         self._build_cache()
-
-        self.mode = "train"
 
         end_time = time.time()
         print(f"Total time for Video Loading is {end_time - start_time}")
@@ -141,17 +170,20 @@ class ChunkedNumpyDataset:
             if len(chunk_files) == 0:
                 print(f"No chunk files found for video {vid_id}. Skipping.")
                 continue
-            label_path = os.path.join(video_dir, "labels.txt")
-            try:
-                with open(label_path, "r") as f:
-                    labels = f.read().split()
-                labels = [convert_int_to_action(int(label, 2)) for label in labels]
-                labels = np.array(labels, dtype=np.int64)
-            except Exception as e:
-                print(f"Error reading label file {label_path}: {e}")
-                continue
+
+            labels = None
+            if self.has_labels:
+                label_path = os.path.join(video_dir, "labels.txt")
+                try:
+                    with open(label_path, "r") as f:
+                        labels = f.read().split()
+                        labels = [convert_int_to_action(int(label, 2)) for label in labels]
+                        labels = np.array(labels, dtype=np.int64)
+                except Exception as e:
+                    print(f"Error reading label file {label_path}: {e}")
+                    continue
             total_frames = chunk_files[-1][1]
-            if len(labels) != total_frames:
+            if self.has_labels and len(labels) != total_frames:
                 print(
                     f"Warning: For video {vid_id}, total_frames={total_frames}, but label count={len(labels)}"
                 )
@@ -160,7 +192,9 @@ class ChunkedNumpyDataset:
                     "video_id": vid_id,
                     "chunks": chunk_files,
                     "labels": labels,
-                    "num_frames": min(total_frames, len(labels)),
+                    "num_frames": min(
+                        total_frames, len(labels) if self.has_labels else total_frames
+                    ),
                 }
             )
 
@@ -174,8 +208,18 @@ class ChunkedNumpyDataset:
                         start,
                     )
                 )
+            
+            if not self.has_labels:
+                self.sequence_indices.append(
+                    (
+                        vid_idx,
+                        n_frames - self.sequence_length,
+                    )
+                )
 
     def _filter_noops(self) -> None:
+        if not self.has_labels:
+            return
         filtered = []
         for vid_idx, start in self.sequence_indices:
             info = self.video_info[vid_idx]
@@ -187,6 +231,8 @@ class ChunkedNumpyDataset:
         self.sequence_indices = filtered
 
     def _filter_no_movement(self) -> None:
+        if not self.has_labels:
+            return
         filtered = []
         for vid_idx, start in self.sequence_indices:
             info = self.video_info[vid_idx]
@@ -220,19 +266,22 @@ class ChunkedNumpyDataset:
     def __len__(self) -> int:
         return len(self.batches[self.mode])
 
-    def _getitem(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def _getitem(self, idx: int) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         vid_idx, start_frame = self.sequence_indices[idx]
         info = self.video_info[vid_idx]
         end_frame = start_frame + self.sequence_length
+        
+        label_tensor = None
+        if self.has_labels:
+            clip_labels = info["labels"][
+                (start_frame + 1) if self.is_vpt else start_frame : (
+                    (end_frame + 1) if self.is_vpt else end_frame
+                )
+            ]
+            label_tensor = torch.tensor(clip_labels, dtype=torch.long)
 
-        clip_labels = info["labels"][
-            (start_frame + 1) if self.is_vpt else start_frame : (
-                (end_frame + 1) if self.is_vpt else end_frame
-            )
-        ]
         clip_frames = self._load_clip_frames(info["chunks"], start_frame, end_frame)
 
-        label_tensor = torch.tensor(clip_labels, dtype=torch.long)
         return clip_frames, label_tensor
 
     def _load_clip_frames(
@@ -271,7 +320,7 @@ class ChunkedNumpyDataset:
             current_frame += take
             if current_frame >= chunk_end:
                 chunk_idx += 1
-
+        
         all_frames = torch.cat(frames_collected, dim=0)
         return all_frames
 
@@ -301,28 +350,41 @@ class ChunkedNumpyDataset:
                 if chunk_end > start and chunk_start < sequence_end:
                     used_chunks.add(chunk_path)
         print(f"Number of unique chunks used: {len(used_chunks)}")
-        self.chunk_cache = LFUCache(
-            capacity=min(self.cache_capacity + 1, len(used_chunks) + 1)
-        )
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.cache_type == "lru":
+            self.chunk_cache = LRUCache(
+                capacity=min(self.cache_capacity + 1, len(used_chunks) + 1)
+            )
+        elif self.cache_type == "lfu":
+            self.chunk_cache = LFUCache(
+                capacity=min(self.cache_capacity + 1, len(used_chunks) + 1)
+            )
+        else:
+            assert False, f"Invalid cache type: {self.cache_type}"
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor | list[Tuple[str, int]]]:
         batch = self.batches[self.mode][idx]
         videos, labels = zip(
             *[self._getitem(sequence_index) for sequence_index in batch]
         )
         videos = torch.stack(videos)
-        labels = torch.stack(labels)
+        if self.has_labels:
+            labels = torch.stack(labels)
+        else:
+            video_ids = [self.video_info[self.sequence_indices[sequence_index][0]]['video_id'] for sequence_index in batch]
+            start_frames = [self.sequence_indices[sequence_index][1] for sequence_index in batch]
+            labels = video_ids, start_frames
         return videos, labels
 
 
-def get_all_videos(directory_path: str) -> tuple[list[str], int]:
+def get_all_videos(directory_path: str, has_labels: bool = True) -> tuple[list[str], int]:
     dirs = []
     file_count = 0
     try:
         with os.scandir(directory_path) as entries:
             for entry in entries:
                 if entry.is_dir():
-                    if os.path.exists(os.path.join(entry, f"labels.txt")):
+                    if not has_labels or os.path.exists(os.path.join(entry, f"labels.txt")):
                         count = 0
                         with os.scandir(entry) as entries2:
                             for entry2 in entries2:
@@ -341,8 +403,8 @@ def get_all_videos(directory_path: str) -> tuple[list[str], int]:
 
 
 if __name__ == "__main__":
-    dir_path = "idm/data/numpy"
-    ids, cache_capacity = get_all_videos(dir_path)
+    dir_path = "vpt/data/numpy"
+    ids, cache_capacity = get_all_videos(dir_path, has_labels=False)
     print(f"Upper Limit for Cache capacity {cache_capacity}")
 
     print(ids)
@@ -353,13 +415,15 @@ if __name__ == "__main__":
         sequence_length=64,
         image_dims=(240, 256),
         batch_size=8,
+        has_labels=False,
+        is_vpt=False,
         cache_capacity=cache_capacity,
-        data_splits={"train": 1},
+        data_splits={"train": 0.999, "val": 0.001},
         stride=16,
     )
 
     start_time = time.time()
-    for i, (video, label) in enumerate(video_dataset):
+    for i, (video, label) in enumerate(video_dataset.set_mode("val")):
         pass
     end_time = time.time()
     print(
@@ -370,7 +434,7 @@ if __name__ == "__main__":
     )
 
     start_time = time.time()
-    for i, (video, label) in enumerate(video_dataset):
+    for i, (video, label) in enumerate(video_dataset.set_mode("val")):
         pass
     end_time = time.time()
     print(

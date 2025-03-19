@@ -19,5 +19,7 @@ for id in "${ids[@]}"; do
 done
 
 for id in "${ids[@]}"; do
-    ~/python3.12/bin/python3.12 /data/ai_club/nes_2025/swag/utils/convert_to_numpy.py --video_id $id --input_dir vpt/data/raw --output_dir vpt/data/numpy --labels False
+    /data/ai_club/nes_2025/swag/.venv/bin/python /data/ai_club/nes_2025/swag/utils/convert_to_numpy.py --video_id $id --input_dir vpt/data/raw --output_dir vpt/data/numpy --labels False
 done
+
+# sbatch utils/scripts/4_convert_vpt_raw_to_numpy.sh

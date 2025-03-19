@@ -7,7 +7,7 @@
 #SBATCH --account=undergrad_research
 #SBATCH --partition=dgx
 #SBATCH --cpus-per-task=40
-#SBATCH --time=7-00:00:00
+#SBATCH --time=5-00:00:00
 #SBATCH --mem=500GB
 
 export PYTHONPATH=/data/ai_club/nes_2025/swag:$PYTHONPATH
@@ -19,5 +19,7 @@ for id in "${ids[@]}"; do
 done
 
 for id in "${ids[@]}"; do
-    ~/python3.12/bin/python3.12 /data/ai_club/nes_2025/swag/utils/convert_to_numpy.py --video_id $id --input_dir idm/data/raw --output_dir idm/data/numpy --labels True
+    /data/ai_club/nes_2025/swag/.venv/bin/python /data/ai_club/nes_2025/swag/utils/convert_to_numpy.py --video_id $id --input_dir idm/data/raw --output_dir idm/data/numpy --labels True
 done
+
+# sbatch utils/scripts/1_convert_idm_raw_to_numpy.sh
