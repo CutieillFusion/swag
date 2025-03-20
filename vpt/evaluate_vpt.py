@@ -314,6 +314,7 @@ def main() -> None:
         batch_size=args.batch_size,
         cache_capacity=cache_capacity,
         is_vpt=True,
+        cache_type="lru",
         stride=args.stride,
         data_splits={"val": 1.0},
     )

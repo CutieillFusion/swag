@@ -140,7 +140,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--ff_dim",
         type=int,
-        default=512,
+        default=2048,
         help="Dimension of feed-forward networks in transformer",
     )
     parser.add_argument(

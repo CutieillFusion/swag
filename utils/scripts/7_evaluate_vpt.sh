@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --account=undergrad_research
-#SBATCH --partition=dgx
+#SBATCH --partition=teaching
 #SBATCH --cpus-per-task=40
 #SBATCH --gres=gpu:1
 #SBATCH --time=7-00:00:00

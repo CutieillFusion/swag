@@ -15,4 +15,4 @@ export PYTHONPATH=/data/ai_club/nes_2025/swag:$PYTHONPATH
 
 /data/ai_club/nes_2025/swag/.venv/bin/python /data/ai_club/nes_2025/swag/idm/run_idm.py --model_path idm/models/$1/best_model.pt
 
-# sbatch utils/scripts/5_label_with_idm.sh 188499
+# sbatch utils/scripts/5_label_with_idm.sh 189912

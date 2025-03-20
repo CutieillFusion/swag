@@ -103,7 +103,8 @@ def compute_class_weights(
     for _, labels in dataloader:
         all_labels.extend(labels.cpu().numpy().flatten())
 
-    existing_classes = np.unique(all_labels)
+    all_labels = np.array(all_labels, dtype=np.int64)
+    existing_classes = np.unique(all_labels).astype(np.int64)
 
     class_weights_dict = dict(
         zip(
@@ -398,18 +399,19 @@ def main() -> None:
     )
     model.print_model_parameters()
 
-    dir_path = "idm/data/numpy"
+    dir_path = "vpt/data/numpy"
     ids, cache_capacity = get_all_videos(dir_path)
     print(f"Upper Limit for Cache capacity {cache_capacity}")
 
     dataset = ChunkedNumpyDataset(
-        video_ids=ids,
+        video_ids=ids[:len(ids) // 20],
         data_dir=dir_path,
         sequence_length=input_dims[0],
         image_dims=(input_dims[2], input_dims[3]),
         batch_size=args.batch_size,
         cache_capacity=cache_capacity,
         is_vpt=True,
+        cache_type="lru",
         stride=args.stride,
         data_splits={"train": 0.8, "val": 0.2},
     )

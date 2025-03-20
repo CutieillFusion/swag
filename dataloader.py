@@ -137,15 +137,18 @@ class ChunkedNumpyDataset:
         if self.has_labels:
             self._filter_noops()
             print(f"Total sequences after noop removal: {len(self.sequence_indices)}")
-            # self._filter_no_movement()
-            # print(
-            #     f"Total sequences after no movement removal: {len(self.sequence_indices)}"
-            # )
+            # if self.is_vpt:
+            #     self._filter_no_movement()
+            #     print(
+            #         f"Total sequences after no movement removal: {len(self.sequence_indices)}"
+            #     )
             random.shuffle(self.sequence_indices)
 
         self._build_batches()
 
         self._build_cache()
+
+        self.mode = list(data_splits.keys())[0]
 
         end_time = time.time()
         print(f"Total time for Video Loading is {end_time - start_time}")
