@@ -70,8 +70,10 @@ class ChunkedNumpyDataset:
         sequence_length: int = 64,
         image_dims: tuple[int, int] = (60, 64),
         batch_size: int = 8,
-        noop_label: int = 27,
+        noop_label: int = 0,
         noop_threshold: int = 32,
+        b_label: int = 2,
+        b_threshold: int = 16,
         cache_capacity: int = 100,
         cache_type: str = "lfu",
         is_vpt: bool = False,
@@ -84,8 +86,10 @@ class ChunkedNumpyDataset:
         self.sequence_length = sequence_length
         self.image_dims = image_dims
         self.batch_size = batch_size
-        self.noop_label = noop_label
+        self.noop_label = convert_int_to_action(noop_label)
         self.noop_threshold = noop_threshold
+        self.b_label = convert_int_to_action(b_label)
+        self.b_threshold = b_threshold
         self.stride = stride
         self.is_vpt = is_vpt
         self.has_labels = has_labels
@@ -137,11 +141,13 @@ class ChunkedNumpyDataset:
         if self.has_labels:
             self._filter_noops()
             print(f"Total sequences after noop removal: {len(self.sequence_indices)}")
-            # if self.is_vpt:
-            #     self._filter_no_movement()
-            #     print(
-            #         f"Total sequences after no movement removal: {len(self.sequence_indices)}"
-            #     )
+            self._filter_b()
+            print(f"Total sequences after b removal: {len(self.sequence_indices)}")
+            if self.is_vpt:
+                self._filter_no_movement()
+                print(
+                    f"Total sequences after no movement removal: {len(self.sequence_indices)}"
+                )
             random.shuffle(self.sequence_indices)
 
         self._build_batches()
@@ -227,8 +233,21 @@ class ChunkedNumpyDataset:
         for vid_idx, start in self.sequence_indices:
             info = self.video_info[vid_idx]
             seq_labels = info["labels"][start : start + self.sequence_length]
-            if not self._has_consecutive_noops(
+            if not self._has_consecutive(
                 seq_labels, self.noop_label, self.noop_threshold
+            ):
+                filtered.append((vid_idx, start))
+        self.sequence_indices = filtered
+
+    def _filter_b(self) -> None:
+        if not self.has_labels:
+            return
+        filtered = []
+        for vid_idx, start in self.sequence_indices:
+            info = self.video_info[vid_idx]
+            seq_labels = info["labels"][start : start + self.sequence_length]
+            if not self._has_consecutive(
+                seq_labels, self.b_label, self.b_threshold
             ):
                 filtered.append((vid_idx, start))
         self.sequence_indices = filtered
@@ -245,7 +264,7 @@ class ChunkedNumpyDataset:
         self.sequence_indices = filtered
 
     @staticmethod
-    def _has_consecutive_noops(seq, label_val, threshold):
+    def _has_consecutive(seq, label_val, threshold):
         count = 0
         for label in seq:
             if label == label_val:
@@ -406,7 +425,7 @@ def get_all_videos(directory_path: str, has_labels: bool = True) -> tuple[list[s
 
 
 if __name__ == "__main__":
-    dir_path = "vpt/data/numpy"
+    dir_path = "idm/data/numpy"
     ids, cache_capacity = get_all_videos(dir_path, has_labels=False)
     print(f"Upper Limit for Cache capacity {cache_capacity}")
 
@@ -418,10 +437,12 @@ if __name__ == "__main__":
         sequence_length=64,
         image_dims=(240, 256),
         batch_size=8,
-        has_labels=False,
-        is_vpt=False,
+        has_labels=True,
+        is_vpt=True,
+        noop_threshold=3,
+        b_threshold=3,
         cache_capacity=cache_capacity,
-        data_splits={"train": 0.999, "val": 0.001},
+        data_splits={"train": 0.99, "val": 0.01},
         stride=16,
     )
 

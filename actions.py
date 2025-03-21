@@ -67,7 +67,6 @@ def convert_int_to_action(input: int) -> str:
 
     raise ValueError(f"Unresolvable input: {input}")
 
-
 if __name__ == "__main__":
     _actions = {v: action_meanings[k] for k, v in action_map.items()}
     for k, v in _actions.items():

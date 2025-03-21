@@ -360,7 +360,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--batch_size", type=int, default=8, help="Batch size for training"
     )
-    parser.add_argument("--stride", type=int, default=16, help="Stride for training")
+    parser.add_argument("--stride", type=int, default=8, help="Stride for training")
     args = parser.parse_args()
     return args
 
@@ -399,18 +399,20 @@ def main() -> None:
     )
     model.print_model_parameters()
 
-    dir_path = "vpt/data/numpy"
+    dir_path = "idm/data/numpy"
     ids, cache_capacity = get_all_videos(dir_path)
     print(f"Upper Limit for Cache capacity {cache_capacity}")
 
     dataset = ChunkedNumpyDataset(
-        video_ids=ids[:len(ids) // 20],
+        video_ids=ids,
         data_dir=dir_path,
         sequence_length=input_dims[0],
         image_dims=(input_dims[2], input_dims[3]),
         batch_size=args.batch_size,
         cache_capacity=cache_capacity,
         is_vpt=True,
+        noop_threshold=3,
+        b_threshold=3,
         cache_type="lru",
         stride=args.stride,
         data_splits={"train": 0.8, "val": 0.2},
