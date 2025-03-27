@@ -80,9 +80,9 @@ class RGBConverter(Wrapper):
         observation = cv2.cvtColor(np.array(observation), cv2.COLOR_BGR2RGB)
         return observation, info
 
-def apply_wrappers(env):
+def apply_wrappers(env, video_folder: str = "emulator/videos"):
     env = RGBConverter(env)
-    env = RecordVideo(env, video_folder="emulator/videos")
+    env = RecordVideo(env, video_folder=video_folder)
     env = ResizeObservation(env, shape=(64, 60))
     env = SkipFrame(env, skip=10)
     env = FrameStack(env, num_stack=64, lz4_compress=True)

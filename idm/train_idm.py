@@ -417,9 +417,9 @@ def main() -> None:
     model = model.to(device)
     start_time = time.time()
 
-    # num_classes = len(ACTION_SPACE)
-    # class_weights = compute_class_weights(dataset, num_classes, device)
-    criterion = nn.CrossEntropyLoss()
+    num_classes = len(ACTION_SPACE)
+    class_weights = compute_class_weights(dataset, num_classes, device)
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     train_idm(
         model,

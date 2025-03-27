@@ -5,11 +5,11 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --account=undergrad_research
-#SBATCH --partition=dgx
+#SBATCH --partition=teaching
 #SBATCH --cpus-per-task=40
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 #SBATCH --time=5-00:00:00
-#SBATCH --mem=450GB
+#SBATCH --mem=350GB
 
 cd /data/ai_club/nes_2025/swag
 
@@ -31,7 +31,7 @@ export PYTHONPATH=/data/ai_club/nes_2025/swag:$PYTHONPATH
 # /data/ai_club/nes_2025/swag/.venv/bin/python idm/train_idm.py \
 #    --job_id 2 \
 #    --embedding_dim 512 \
-#    --ff_dim 512 \
+#    --ff_dim 2048 \
 #    --transformer_blocks 2 \
 #    --transformer_heads 4 \
 #    --x 64 \

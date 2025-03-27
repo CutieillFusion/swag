@@ -5,11 +5,10 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --account=undergrad_research
-#SBATCH --partition=highmem
 #SBATCH --cpus-per-task=40
 #SBATCH --gres=gpu:1
 #SBATCH --time=5-00:00:00
-#SBATCH --mem=600GB
+#SBATCH --mem=350GB
 
 cd /data/ai_club/nes_2025/swag
 
