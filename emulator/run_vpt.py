@@ -24,7 +24,7 @@ else:
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 env = gym_super_mario_bros.make(
-    "SuperMarioBrosRandomStages-v0", render_mode="rgb_array", apply_api_compatibility=True
+    "SuperMarioBros-v0", render_mode="rgb_array", apply_api_compatibility=True
 )
 env = JoypadSpace(env, ACTION_SPACE)
 env = apply_wrappers(env, args.output_dir)
