@@ -5,17 +5,17 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --account=undergrad_research
-#SBATCH --partition=teaching
+#SBATCH --partition=dgxh100
 #SBATCH --cpus-per-task=40
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:2
 #SBATCH --time=5-00:00:00
-#SBATCH --mem=350GB
+#SBATCH --mem=1200GB
 
 cd /data/ai_club/nes_2025/swag
 
 export PYTHONPATH=/data/ai_club/nes_2025/swag:$PYTHONPATH
 
-/data/ai_club/nes_2025/swag/.venv/bin/python idm/train_idm.py \
+singularity exec --env PYTHONPATH=$PYTHONPATH --nv -B /data/ai_club/nes_2025/swag:/data/ai_club/nes_2025/swag utils/containers/container.sif python idm/train_idm.py \
     --job_id $SLURM_JOB_ID \
     --embedding_dim $1 \
     --ff_dim $2 \

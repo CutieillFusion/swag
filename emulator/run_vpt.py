@@ -43,30 +43,47 @@ vpt = VPT(
     freeze=True,
 )
 
+def append_values(observations, rewards, dones, observation, reward, done):
+    observations.append(observation)
+    rewards.append(reward)
+    dones.append(done)
+
 def process_observation(observation):
     observation = torch.from_numpy(np.asarray(observation)).float() / 255.0
-    observation = observation.permute(0, 3, 1, 2).unsqueeze(0)
+    observation = observation.permute(2, 0, 1)
     return observation.to(device)
+
+def get_filtered_logits(logits, threshold: float = 0.9):
+    sorted_probs, indices = torch.sort(logits[0][-1], descending=True)
+    cumsum_probs = torch.cumsum(sorted_probs, dim=0)
+    cutoff = torch.where(cumsum_probs > threshold)[0][0] + 1
+    filtered_probs = torch.zeros_like(logits[0][-1])
+    filtered_probs[indices[:cutoff]] = logits[0][-1][indices[:cutoff]]
+    filtered_probs = filtered_probs / filtered_probs.sum()
+    action_index = torch.multinomial(filtered_probs, 1).item()
+    return filtered_probs, action_index
 
 vpt.load_model(args.model_path)
 vpt = vpt.to(device)
 vpt.eval()
 env.reset()
 
+observations, rewards, dones = [], [], []
+
 observation, reward, done, trunc, info = env.step(action=0)
+append_values(observations, rewards, dones, observation, reward, done)
 
 epochs = 0
 
 while True:
-    logits = torch.softmax(vpt(process_observation(observation)), dim=-1)
-    sorted_probs, indices = torch.sort(logits[0][-1], descending=True)
-    cumsum_probs = torch.cumsum(sorted_probs, dim=0)
-    cutoff = torch.where(cumsum_probs > 0.9)[0][0] + 1
-    filtered_probs = torch.zeros_like(logits[0][-1])
-    filtered_probs[indices[:cutoff]] = logits[0][-1][indices[:cutoff]]
-    filtered_probs = filtered_probs / filtered_probs.sum()
-    action_index = torch.multinomial(filtered_probs, 1).item()
+
+    if len(observations) > 64:
+        logits = vpt(process_observation(observation))
+        _, action_index = get_filtered_logits(logits)
+
     observation, reward, done, truncated, info = env.step(action_index)
+    append_values(observations, rewards, dones, observation, reward, done)
+
 
     if done:
         observation, info = env.reset()

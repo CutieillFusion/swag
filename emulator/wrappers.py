@@ -85,5 +85,4 @@ def apply_wrappers(env, video_folder: str = "emulator/videos"):
     env = RecordVideo(env, video_folder=video_folder)
     env = ResizeObservation(env, shape=(64, 60))
     env = SkipFrame(env, skip=10)
-    env = FrameStack(env, num_stack=64, lz4_compress=True)
     return env

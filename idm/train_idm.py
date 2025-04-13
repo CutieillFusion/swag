@@ -357,7 +357,7 @@ def parse_arguments() -> argparse.Namespace:
         help="Comma-separated list of feature channels",
     )
     parser.add_argument(
-        "--batch_size", type=int, default=8, help="Batch size for training"
+        "--batch_size", type=int, default=4, help="Batch size for training"
     )
     parser.add_argument("--stride", type=int, default=16, help="Stride for training")
     args = parser.parse_args()

@@ -8,6 +8,8 @@ __pycache__
 /vpt/models/*
 utils/misc/idm_video_ids.txt
 utils/misc/vpt_video_ids.txt
+utils/misc/optimal_vpt_video_ids.txt
 label_histogram.png
 emulator/videos/*
 emulator/models/*
+utils/containers/container.sif
