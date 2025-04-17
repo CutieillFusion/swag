@@ -35,7 +35,7 @@ def parse_arguments():
     parser.add_argument(
         "--sequence_length",
         type=int,
-        default=1024,
+        default=128,
         help="Number of continuous frames per sequence",
     )
     parser.add_argument(
