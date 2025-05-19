@@ -124,6 +124,20 @@ class NumpyVideoDataset:
                 count = 0
         return False
 
+    def get_all_labels(self) -> list:
+        if not self.has_labels:
+            return []
+            
+        all_labels = []
+        for vid_idx, start in self.sequence_indices:
+            info = self.video_info[vid_idx]
+            end = start + self.sequence_length
+            seq_labels = info["labels"][(start + 1) if self.is_vpt else start:
+                                       (end + 1) if self.is_vpt else end]
+            all_labels.extend(seq_labels)
+            
+        return all_labels
+
     def __len__(self) -> int:
         return len(self.sequence_indices)
 
@@ -206,7 +220,7 @@ def cleanup() -> None:
 def run_worker(rank, world_size):
     setup(rank, world_size)
     
-    dir_path = "idm/data/numpy"
+    dir_path = "idm/data/numpy4"
     ids = get_all_videos(dir_path, has_labels=True)
     print_rank(f"Found {len(ids)} video directories", rank)
 
@@ -214,7 +228,7 @@ def run_worker(rank, world_size):
         video_ids=ids,
         data_dir=dir_path,
         sequence_length=64,
-        stride=512,
+        stride=32,
         has_labels=True,
         filter_thresholds={
             0: 3,
@@ -243,11 +257,11 @@ def run_worker(rank, world_size):
     
     print_rank(f"Dataset size: {len(video_dataset)}, Dataloader batches: {len(dataloader)}", rank)
     
-    dist.barrier(device_ids=[torch.cuda.current_device()])
-    for epoch in range(1, 5):
+    for epoch in range(1, 4):
         start_time = time.time()
         total_samples = 0
         for batch_idx, (videos, labels) in enumerate(dataloader):
+            videos, labels = videos.to(torch.cuda.current_device(), non_blocking=True), labels.to(torch.cuda.current_device(), non_blocking=True)
             batch_size = videos.size(0)
             total_samples += batch_size
         end_time = time.time()

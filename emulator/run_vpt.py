@@ -24,7 +24,7 @@ else:
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 env = gym_super_mario_bros.make(
-    "SuperMarioBros-v0", render_mode="rgb_array", apply_api_compatibility=True
+    "SuperMarioBrosRandomStages-v0", render_mode="rgb_array", apply_api_compatibility=True
 )
 env = JoypadSpace(env, ACTION_SPACE)
 env = apply_wrappers(env, args.output_dir)
@@ -38,7 +38,7 @@ vpt = VPT(
     feature_channels=[32, 64, 64],
     transformer_blocks=2,
     transformer_heads=4,
-    ff_dim=2048,
+    ff_dim=512,
     embedding_dim=512,
     freeze=True,
 )

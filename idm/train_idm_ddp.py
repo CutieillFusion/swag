@@ -12,9 +12,10 @@ from torch.utils.data import DataLoader, DistributedSampler
 from torch.nn.parallel import DistributedDataParallel
 import numpy as np
 import yaml
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 import torch.multiprocessing as mp
+import random
 
 def print_rank(message: str, rank: int) -> None:
     if rank == 0:
@@ -28,7 +29,7 @@ class ModelConfig:
     transformer_blocks: int = 1
     x: int = 32
     y: int = 30
-    feature_channels: List[int] = [16, 16, 16]
+    feature_channels: List[int] = field(default_factory=lambda: [16, 16, 16])
     learning_rate: float = 1e-5
     weight_decay: float = 1e-5
     batch_size: int = 4
@@ -47,14 +48,14 @@ class TrainingConfig:
     data_dir: str = "idm/data/numpy"
     test_train_split: float = 0.8
     min_class_weight: int = 1000
+    epochs: int = 2
+    seed: int = 42
 
+    
 def compute_class_weights(
-    dataloader: NumpyVideoDataset, num_classes: int, device: torch.device, min_class_weight: int = 1000
+    dataset: NumpyVideoDataset, num_classes: int, device: torch.device, min_class_weight: int = 1000
 ) -> torch.Tensor:
-    all_labels = []
-
-    for _, labels in dataloader:
-        all_labels.extend(labels.cpu().numpy().flatten())
+    all_labels = dataset.get_all_labels()
 
     existing_classes = np.unique(all_labels)
 
@@ -67,7 +68,8 @@ def compute_class_weights(
 
     class_weights = np.full(num_classes, min_class_weight, dtype=np.float32)
     for cls, weight in class_weights_dict.items():
-        class_weights[cls] = weight
+        if weight > min_class_weight:
+            class_weights[cls] = min_class_weight
 
     return torch.tensor(class_weights, dtype=torch.float).to(device)
 
@@ -106,20 +108,171 @@ def load_config(config_path: str) -> tuple[ModelConfig, TrainingConfig]:
     
     return model_config, training_config
 
-def setup(rank: int, world_size: int) -> None:
+def prepare_data_loaders(dataset: NumpyVideoDataset, train_ratio: float, world_size: int, rank: int, batch_size: int, seed: int) -> tuple[DataLoader, DataLoader]:
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+       
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        dataset, [train_ratio, 1 - train_ratio]
+    )
+    
+    train_sampler = DistributedSampler(
+        train_dataset,
+        num_replicas=world_size,
+        rank=rank,
+        shuffle=True,
+        drop_last=True,
+        seed=seed
+    )
+    
+    val_sampler = DistributedSampler(
+        val_dataset,
+        num_replicas=world_size,
+        rank=rank,
+        shuffle=False,
+        seed=seed
+    )
+    
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        sampler=train_sampler,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=True,
+        prefetch_factor=2
+    )
+    
+    val_dataloader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        sampler=val_sampler,
+        num_workers=2,
+        pin_memory=True,
+        persistent_workers=True,
+        prefetch_factor=2
+    )
+    
+    return train_dataloader, val_dataloader
+
+def train_idm(
+    model: nn.Module,
+    train_dataloader: DataLoader,
+    val_dataloader: DataLoader,
+    criterion: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    rank: int,
+    training_config: TrainingConfig,
+    job_id: str
+) -> None:
+    best_val_loss = float('inf')
+    patience_counter = 0
+    
+    for epoch in range(training_config.epochs):
+        model.train()
+        train_dataloader.sampler.set_epoch(epoch)
+        
+        train_loss = 0.0
+        train_samples = 0
+        train_correct = 0
+        
+        for videos, labels in train_dataloader:
+            videos: torch.Tensor = videos.to(device, non_blocking=True)
+            labels: torch.Tensor = labels.to(device, non_blocking=True)
+            
+            optimizer.zero_grad()
+            
+            logits: torch.Tensor = model(videos)
+
+            logits = logits.reshape(-1, logits.size(-1))
+            labels = labels.reshape(-1)
+
+            loss: torch.Tensor = criterion(logits, labels)
+
+            loss.backward()
+            optimizer.step()
+            
+            train_loss += loss.item() * videos.size(0)
+            train_samples += videos.size(0)
+            
+            _, predicted = torch.max(logits, 1)
+            train_correct += (predicted == labels).sum().item()
+            
+        train_metrics = torch.tensor([train_loss, train_samples, train_correct], device=device)
+        dist.all_reduce(train_metrics, op=dist.ReduceOp.SUM)
+        
+        total_train_loss, total_train_samples, total_train_correct = train_metrics.tolist()
+        avg_train_loss = total_train_loss / total_train_samples
+        train_accuracy = total_train_correct / total_train_samples
+        
+        print_rank(f"Epoch {epoch + 1} training | Loss: {avg_train_loss:.4f} | Accuracy: {train_accuracy:.4f}", rank)
+
+        dist.barrier(device_ids=[device.index])
+        
+        model.eval()
+        val_dataloader.sampler.set_epoch(epoch)
+        val_loss = 0.0
+        val_samples = 0
+        val_correct = 0
+        
+        for videos, labels in val_dataloader:
+            with torch.no_grad():
+                videos: torch.Tensor = videos.to(device, non_blocking=True)
+                labels: torch.Tensor = labels.to(device, non_blocking=True)
+                
+                logits: torch.Tensor = model(videos)
+
+                logits = logits.reshape(-1, logits.size(-1))
+                labels = labels.reshape(-1)
+
+                loss: torch.Tensor = criterion(logits, labels)
+
+                val_loss += loss.item() * videos.size(0)
+                val_samples += videos.size(0)
+                
+                _, predicted = torch.max(logits, 1)
+                val_correct += (predicted == labels).sum().item()
+        
+        val_metrics = torch.tensor([val_loss, val_samples, val_correct], device=device)
+        dist.all_reduce(val_metrics, op=dist.ReduceOp.SUM)
+        
+        total_val_loss, total_val_samples, total_val_correct = val_metrics.tolist()
+        avg_val_loss = total_val_loss / total_val_samples
+        val_accuracy = total_val_correct / total_val_samples
+        
+        print_rank(f"Epoch {epoch + 1} validation | Loss: {avg_val_loss:.4f} | Accuracy: {val_accuracy:.4f}", rank)
+        
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            patience_counter = 0
+            if rank == 0:
+                model_path = os.path.join("idm/models", job_id)
+                os.makedirs(model_path, exist_ok=True)
+                torch.save(model.module.state_dict(), os.path.join(model_path, f"idm_best.pt"))
+        else:
+            patience_counter += 1
+            if patience_counter >= training_config.patience:
+                print_rank(f"Early stopping triggered after {epoch + 1} epochs", rank)
+                break
+        
+        dist.barrier(device_ids=[device.index])
+
+def setup(local_rank: int, world_size: int, rank: int) -> None:
+    torch.cuda.set_device(local_rank)
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
-    torch.cuda.set_device(rank)
 
 def cleanup() -> None:
     dist.destroy_process_group()
 
-def train(rank, world_size, args):
-    setup(rank, world_size)
+def train(rank: int, local_rank: int, world_size: int, args: argparse.Namespace):
+    setup(local_rank, world_size, rank)
     
     model_config, training_config = load_config(args.config)
 
-    model_path = os.path.join("idm/models", str(args.job_id))
-    os.makedirs(model_path, exist_ok=True)
+    print_rank(model_config, rank)
+    print_rank(training_config, rank)
 
     input_dims = (model_config.sequence_length, 3, model_config.y, model_config.x)
     print_rank(f"Input Dims {input_dims}", rank)
@@ -164,32 +317,44 @@ def train(rank, world_size, args):
         is_vpt=False,
     )
 
-    sampler = DistributedSampler(
-        dataset,
-        num_replicas=world_size,
+    train_dataloader, val_dataloader = prepare_data_loaders(
+        dataset=dataset,
+        train_ratio=training_config.test_train_split,
+        world_size=world_size,
         rank=rank,
-        shuffle=True
+        batch_size=training_config.batch_size,
+        seed=training_config.seed
     )
 
-    dataloader = DataLoader(
-        dataset, 
-        batch_size=training_config.batch_size, 
-        sampler=sampler,
-        num_workers=4,
-        pin_memory=True,
-        persistent_workers=True,
-        prefetch_factor=2
-    )
-
-    device = torch.device(f"cuda:{rank}")
+    device = torch.device(f"cuda:{local_rank}")
     model = model.to(device)
-    model = DistributedDataParallel(model, device_ids=[rank])
+    model = DistributedDataParallel(model, device_ids=[local_rank])
     
     start_time = time.time()
 
     num_classes = len(ACTION_SPACE)
     class_weights = compute_class_weights(dataset, num_classes, device, training_config.min_class_weight)
+    print_rank(f"Class Weights {class_weights}", rank)
+    
     criterion = nn.CrossEntropyLoss(weight=class_weights)
+
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=training_config.learning_rate,
+        weight_decay=training_config.weight_decay
+    )
+
+    train_idm(
+        model,
+        train_dataloader,
+        val_dataloader,
+        criterion,
+        optimizer,
+        device,
+        rank,
+        training_config,
+        args.job_id
+    )
 
     end_time = time.time()
     total_training_time = end_time - start_time
@@ -197,24 +362,16 @@ def train(rank, world_size, args):
     
     cleanup()
 
-
 def main():
     args = parse_arguments()
-    
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "12355"
-    
-    world_size = torch.cuda.device_count()
-    assert world_size >= 2, "Need at least 2 GPUs for DDP training"
-    
-    mp.spawn(
-        train,
-        args=(world_size, args),
-        nprocs=world_size,
-        join=True
-    )
 
+    local_rank = int(os.environ["LOCAL_RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+    rank       = int(os.environ["RANK"])
+
+    assert world_size >= 2, f"Need >=2 GPUs (got {world_size})"
+
+    train(rank, local_rank, world_size, args)
 
 if __name__ == "__main__":
-    mp.set_start_method('spawn', force=True)
     main()

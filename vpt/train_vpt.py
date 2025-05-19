@@ -399,7 +399,7 @@ def main() -> None:
     )
     model.print_model_parameters()
 
-    dir_path = "idm/data/numpy"
+    dir_path = "vpt/data/numpy"
     ids, cache_capacity = get_all_videos(dir_path)
     print(f"Upper Limit for Cache capacity {cache_capacity}")
 
@@ -513,7 +513,7 @@ def main() -> None:
     ]
 
     dataset = ChunkedNumpyDataset(
-        video_ids=ids,
+        video_ids=ids[:10],
         data_dir=dir_path,
         sequence_length=input_dims[0],
         image_dims=(input_dims[2], input_dims[3]),

@@ -5,7 +5,7 @@ import os
 import matplotlib.pyplot as plt
 from idm import IDM
 from dataloader import ChunkedNumpyDataset, get_all_videos
-from actions import ACTION_SPACE, action_meanings
+from actions import ACTION_SPACE, action_meanings, action_map
 
 def save_class_histogram(
     all_labels: torch.Tensor, file_path: str
@@ -74,7 +74,7 @@ def run_model(
 
                     with open(output_file, "w") as f:
                         for label in video_labels:
-                            binary_label = bin(label)[2:].zfill(8)
+                            binary_label = bin(action_map[label])[2:].zfill(8)
                             f.write(f"{binary_label}\n")
 
                     print(f"Saved labels for video {current_video} to {output_file}")

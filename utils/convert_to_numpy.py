@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 import argparse
 import os
-import shutil
 import time
 
 
@@ -35,7 +34,7 @@ def parse_arguments():
     parser.add_argument(
         "--sequence_length",
         type=int,
-        default=128,
+        default=8,
         help="Number of continuous frames per sequence",
     )
     parser.add_argument(
