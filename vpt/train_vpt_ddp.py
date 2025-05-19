@@ -3,7 +3,7 @@ from sklearn.utils.class_weight import compute_class_weight
 import torch
 import os
 import time
-from idm import IDM
+from vpt import VPT
 from torch import nn
 import torch.distributed as dist
 from ddp_dataloader import NumpyVideoDataset, get_all_videos
@@ -44,7 +44,7 @@ class TrainingConfig:
     weight_decay: float = 0.0001
     patience: int = 10
     stride: int = 1
-    data_dir: str = "idm/data/numpy"
+    data_dir: str = "vpt/data/numpy"
     test_train_split: float = 0.8
     min_class_weight: int = 1000
     epochs: int = 2
@@ -77,7 +77,7 @@ def parse_arguments() -> argparse.Namespace:
         description="Argument Parser for Model Configuration"
     )
     parser.add_argument(
-        "--config", type=str, default="idm.yaml", help="Path to config file"
+        "--config", type=str, default="vpt.yaml", help="Path to config file"
     )
     parser.add_argument("--job_id", type=str, required=True, help="Job identifier")
     args = parser.parse_args()
@@ -155,7 +155,7 @@ def prepare_data_loaders(dataset: NumpyVideoDataset, train_ratio: float, world_s
     
     return train_dataloader, val_dataloader
 
-def train_idm(
+def train_vpt(
     model: nn.Module,
     train_dataloader: DataLoader,
     val_dataloader: DataLoader,
@@ -247,9 +247,9 @@ def train_idm(
             best_val_loss = avg_val_loss
             patience_counter = 0
             if rank == 0:
-                model_path = os.path.join("idm/models", job_id)
+                model_path = os.path.join("vpt/models", job_id)
                 os.makedirs(model_path, exist_ok=True)
-                torch.save(model.module.state_dict(), os.path.join(model_path, f"idm_best.pt"))
+                torch.save(model.module.state_dict(), os.path.join(model_path, f"vpt_best.pt"))
         else:
             patience_counter += 1
             if patience_counter >= training_config.patience:
@@ -284,7 +284,7 @@ def train(rank: int, local_rank: int, world_size: int, args: argparse.Namespace)
     print_rank(f"Weight Decay {training_config.weight_decay}", rank)
     print_rank(f"Spatial Channels {model_config.spatial_channels}", rank)
 
-    model = IDM(
+    model = VPT(
         n_actions=len(ACTION_SPACE),
         input_dim=input_dims,
         feature_channels=model_config.feature_channels,
@@ -313,7 +313,7 @@ def train(rank: int, local_rank: int, world_size: int, args: argparse.Namespace)
             2: 3,
         },
         rank=rank,
-        is_vpt=False,
+        is_vpt=True,
     )
 
     train_dataloader, val_dataloader = prepare_data_loaders(
@@ -343,7 +343,7 @@ def train(rank: int, local_rank: int, world_size: int, args: argparse.Namespace)
         weight_decay=training_config.weight_decay
     )
 
-    train_idm(
+    train_vpt(
         model,
         train_dataloader,
         val_dataloader,

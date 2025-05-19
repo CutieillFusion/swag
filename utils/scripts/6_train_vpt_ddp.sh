@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=SWAG_2
-#SBATCH --output=slurm/idm/%j.out
-#SBATCH --error=slurm/idm/%j.err
+#SBATCH --job-name=SWAG_6
+#SBATCH --output=slurm/vpt/%j.out
+#SBATCH --error=slurm/vpt/%j.err
 #SBATCH --nodes=3
 #SBATCH --gpus-per-node=8
 #SBATCH --partition=dgx,teaching
@@ -9,8 +9,6 @@
 #SBATCH --cpus-per-task=72
 #SBATCH --time=5-00:00:00
 #SBATCH --mem=100GB
-
-cd /data/ai_club/nes_2025/swag
 
 export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n1)
 export MASTER_PORT=12355
@@ -31,6 +29,6 @@ srun --mpi=none \
       --rdzv_backend=c10d \
       --rdzv_endpoint=${MASTER_ADDR}:${MASTER_PORT} \
       --rdzv_id=$SLURM_JOB_ID \
-      idm/train_idm_ddp.py \
-        --config idm.yaml \
+      vpt/train_vpt_ddp.py \
+        --config vpt.yaml \
         --job_id $SLURM_JOB_ID
