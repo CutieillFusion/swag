@@ -44,7 +44,7 @@ class TrainingConfig:
     weight_decay: float = 0.0001
     patience: int = 10
     stride: int = 1
-    data_dir: str = "vpt/data/numpy"
+    data_dir: str = "idm/data/numpy"
     test_train_split: float = 0.8
     min_class_weight: int = 1000
     epochs: int = 2

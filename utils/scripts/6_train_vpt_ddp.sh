@@ -4,18 +4,19 @@
 #SBATCH --error=slurm/vpt/%j.err
 #SBATCH --nodes=3
 #SBATCH --gpus-per-node=8
-#SBATCH --partition=dgx,teaching
+#SBATCH --partition=dgx
 #SBATCH --account=undergrad_research
 #SBATCH --cpus-per-task=72
 #SBATCH --time=5-00:00:00
-#SBATCH --mem=100GB
+#SBATCH --mem=150GB
 
 export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n1)
 export MASTER_PORT=12355
 export OMP_NUM_THREADS=9
 
 echo "MASTER_ADDR=$MASTER_ADDR  MASTER_PORT=$MASTER_PORT"
-echo "Nodes: $(scontrol show hostnames $SLURM_JOB_NODELIST)"
+echo "Nodes:"
+echo "$(scontrol show hostnames $SLURM_JOB_NODELIST)"
 
 srun --mpi=none \
   singularity exec --nv \

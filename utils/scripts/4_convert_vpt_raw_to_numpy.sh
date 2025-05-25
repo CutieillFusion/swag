@@ -12,7 +12,7 @@
 
 export PYTHONPATH=/data/ai_club/nes_2025/swag:$PYTHONPATH
 
-mapfile -t ids < utils/misc/vpt_video_ids.txt
+mapfile -t ids < utils/misc/optimal_vpt_video_ids.txt
 
 for id in "${ids[@]}"; do
     rm -rf vpt/data/numpy/$id
