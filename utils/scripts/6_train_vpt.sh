@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=RL_DYLAN
+#SBATCH --job-name=SWAG_6
 #SBATCH --output=slurm/vpt/%j.out
 #SBATCH --error=slurm/vpt/%j.err
 #SBATCH --nodes=1
@@ -27,18 +27,18 @@ export PYTHONPATH=/data/ai_club/nes_2025/swag:$PYTHONPATH
     --weight_decay $8 \
     --feature_channels $9
 
-# sbatch utils/scripts/6_train_vpt.sh 512 512 2 4 64 60 0.0002147 0.000001 32,64,64
+# sbatch utils/scripts/6_train_vpt.sh 1024 2048 4 8 256 240 0.0002147 0.000001 64,128,128
 # /data/ai_club/nes_2025/swag/.venv/bin/python vpt/train_vpt.py \
 #    --job_id 0 \
-#    --embedding_dim 512 \
-#    --ff_dim 512 \
-#    --transformer_blocks 2 \
-#    --transformer_heads 4 \
-#    --x 64 \
-#    --y 60 \
+#    --embedding_dim 1024 \
+#    --ff_dim 2048 \
+#    --transformer_blocks 4 \
+#    --transformer_heads 8 \
+#    --x 256 \
+#    --y 240 \
 #    --learning_rate 0.0002147 \
 #    --weight_decay 0.000001 \
-#    --feature_channels 32,64,64
+#    --feature_channels 64,128,128
 
 # /data/ai_club/nes_2025/swag/.venv/bin/python vpt/train_vpt.py \
 #    --job_id 0 \

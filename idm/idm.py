@@ -2,7 +2,7 @@ import time
 import torch
 from torch import nn
 from modules import Stack, PositionalEncoding, NormalizedTransformerBlock
-
+from gym_super_mario_bros.actions import SIMPLE_MOVEMENT
 
 class IDM(nn.Module):
     def __init__(

@@ -1,5 +1,17 @@
 from itertools import product
 
+raw_action_mappings = {
+    "right": 0b10000000,
+    "left": 0b01000000,
+    "down": 0b00100000,
+    "up": 0b00010000,
+    "start": 0b00001000,
+    "select": 0b00000100,
+    "B": 0b00000010,
+    "A": 0b00000001,
+    "NOOP": 0b00000000,
+}
+
 ACTION_SET = {
     "up_down": ["NOOP", "up", "down"],
     "left_right": ["NOOP", "left", "right"],
@@ -27,27 +39,21 @@ ACTION_SPACE = [
     for action in action_combinations
 ]
 
-raw_action_mappings = {
-    "right": 0b10000000,
-    "left": 0b01000000,
-    "down": 0b00100000,
-    "up": 0b00010000,
-    "start": 0b00001000,
-    "select": 0b00000100,
-    "B": 0b00000010,
-    "A": 0b00000001,
-    "NOOP": 0b00000000,
-}
+def get_raw_value(action_buttons):
+    byte_action = 0
+    for button in action_buttons:
+        byte_action |= raw_action_mappings[button]
+    return byte_action
+
+ACTION_SPACE = sorted(ACTION_SPACE, key=get_raw_value)
 
 action_map = {}
 action_meanings = {}
 
-for action, button_list in enumerate(ACTION_SPACE):
-    byte_action = 0
-    for button in button_list:
-        byte_action |= raw_action_mappings[button]
-    action_map[action] = byte_action
-    action_meanings[action] = " ".join(button_list)
+for action_idx, button_list in enumerate(ACTION_SPACE):
+    byte_action = get_raw_value(button_list)
+    action_map[action_idx] = byte_action
+    action_meanings[action_idx] = " ".join(button_list)
 
 mapping_action = {v: k for k, v in action_map.items()}
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=RL_DYLAN
+#SBATCH --job-name=SWAG_7
 #SBATCH --output=slurm/vpt/%j.out
 #SBATCH --error=slurm/vpt/%j.err
 #SBATCH --nodes=1
@@ -14,7 +14,7 @@ cd /data/ai_club/nes_2025/swag
 
 export PYTHONPATH=/data/ai_club/nes_2025/swag:$PYTHONPATH
 
-/data/ai_club/nes_2025/swag/.venv/bin/python vpt/evaluate_vpt.py --model_path vpt/models/$1/best_model.pt --output_dir vpt/models/$1 --stride $2
+# /data/ai_club/nes_2025/swag/.venv/bin/python vpt/evaluate_vpt.py --model_path vpt/models/$1/best_model.pt --output_dir vpt/models/$1 --stride $2
 
 /data/ai_club/nes_2025/swag/.venv/bin/python emulator/run_vpt.py --model_path vpt/models/$1/best_model.pt --output_dir emulator/models/$1
 

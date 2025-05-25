@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=RL_DYLAN
+#SBATCH --job-name=SWAG_2
 #SBATCH --output=slurm/idm/%j.out
 #SBATCH --error=slurm/idm/%j.err
 #SBATCH --nodes=1
@@ -15,7 +15,13 @@ cd /data/ai_club/nes_2025/swag
 
 export PYTHONPATH=/data/ai_club/nes_2025/swag:$PYTHONPATH
 
-singularity exec --env PYTHONPATH=$PYTHONPATH --nv -B /data/ai_club/nes_2025/swag:/data/ai_club/nes_2025/swag utils/containers/container.sif python idm/train_idm.py \
+singularity exec \
+    --env PYTHONPATH=$PYTHONPATH \
+    --nv \
+    -B /data/ai_club/nes_2025/swag:/data/ai_club/nes_2025/swag \
+    utils/containers/container.sif \
+    torchrun --nproc_per_node=8 \
+    idm/train_idm.py \
     --job_id $SLURM_JOB_ID \
     --embedding_dim $1 \
     --ff_dim $2 \
@@ -28,14 +34,20 @@ singularity exec --env PYTHONPATH=$PYTHONPATH --nv -B /data/ai_club/nes_2025/swa
     --feature_channels $9
 
 # sbatch utils/scripts/2_train_idm.sh 512 2048 2 4 64 60 0.0002147 0.000001 32,64,64
-# /data/ai_club/nes_2025/swag/.venv/bin/python idm/train_idm.py \
-#    --job_id 2 \
-#    --embedding_dim 512 \
-#    --ff_dim 2048 \
-#    --transformer_blocks 2 \
-#    --transformer_heads 4 \
-#    --x 64 \
-#    --y 60 \
-#    --learning_rate 0.0002147 \
-#    --weight_decay 0.000001 \
-#    --feature_channels 32,64,64
+# singularity exec \
+#     --env PYTHONPATH=$PYTHONPATH \
+#     --nv \
+#     -B /data/ai_club/nes_2025/swag:/data/ai_club/nes_2025/swag \
+#     utils/containers/container.sif \
+#     torchrun --nproc_per_node=8 \
+#     idm/train_idm.py \
+#     --job_id 2 \
+#     --embedding_dim 128 \
+#     --ff_dim 128 \
+#     --transformer_blocks 1 \
+#     --transformer_heads 2 \
+#     --x 256 \
+#     --y 240 \
+#     --learning_rate 0.0002147 \
+#     --weight_decay 0.000001 \
+#     --feature_channels 16,16,16
