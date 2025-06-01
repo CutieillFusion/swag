@@ -2,11 +2,11 @@
 #SBATCH --job-name=SWAG_6
 #SBATCH --output=slurm/vpt/%j.out
 #SBATCH --error=slurm/vpt/%j.err
-#SBATCH --nodes=3
-#SBATCH --gpus-per-node=8
-#SBATCH --partition=dgx
+#SBATCH --nodes=18
+#SBATCH --gpus-per-node=4
+#SBATCH --partition=teaching
 #SBATCH --account=undergrad_research
-#SBATCH --cpus-per-task=72
+#SBATCH --cpus-per-task=60
 #SBATCH --time=5-00:00:00
 #SBATCH --mem=150GB
 

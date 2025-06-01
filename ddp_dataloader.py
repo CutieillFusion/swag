@@ -220,7 +220,7 @@ def cleanup() -> None:
 def run_worker(rank, world_size):
     setup(rank, world_size)
     
-    dir_path = "idm/data/numpy4"
+    dir_path = "idm/data/numpy"
     ids = get_all_videos(dir_path, has_labels=True)
     print_rank(f"Found {len(ids)} video directories", rank)
 

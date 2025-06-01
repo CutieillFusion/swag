@@ -98,7 +98,7 @@ def run_model(
 
         with open(output_file, "w") as f:
             for label in video_labels:
-                binary_label = bin(label)[2:].zfill(8)
+                binary_label = bin(action_map[label])[2:].zfill(8)
                 f.write(f"{binary_label}\n")
 
         print(f"Saved labels for video {current_video} to {output_file}")
