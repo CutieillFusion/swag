@@ -68,7 +68,7 @@ def compute_class_weights(
     class_weights = np.full(num_classes, min_class_weight, dtype=np.float32)
     for cls, weight in class_weights_dict.items():
         if weight > min_class_weight:
-            class_weights[cls] = min_class_weight
+            class_weights[cls] = weight
 
     return torch.tensor(class_weights, dtype=torch.float).to(device)
 
@@ -130,6 +130,7 @@ def prepare_data_loaders(dataset: NumpyVideoDataset, train_ratio: float, world_s
         num_replicas=world_size,
         rank=rank,
         shuffle=False,
+        drop_last=True,
         seed=seed
     )
     
@@ -140,7 +141,8 @@ def prepare_data_loaders(dataset: NumpyVideoDataset, train_ratio: float, world_s
         num_workers=4,
         pin_memory=True,
         persistent_workers=True,
-        prefetch_factor=2
+        prefetch_factor=2,
+        drop_last=True
     )
     
     val_dataloader = DataLoader(
@@ -150,7 +152,8 @@ def prepare_data_loaders(dataset: NumpyVideoDataset, train_ratio: float, world_s
         num_workers=2,
         pin_memory=True,
         persistent_workers=True,
-        prefetch_factor=2
+        prefetch_factor=2,
+        drop_last=True
     )
     
     return train_dataloader, val_dataloader

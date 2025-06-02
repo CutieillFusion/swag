@@ -2,7 +2,7 @@
 #SBATCH --job-name=SWAG_6
 #SBATCH --output=slurm/vpt/%j.out
 #SBATCH --error=slurm/vpt/%j.err
-#SBATCH --nodes=18
+#SBATCH --nodes=15
 #SBATCH --gpus-per-node=4
 #SBATCH --partition=teaching
 #SBATCH --account=undergrad_research

@@ -18,5 +18,5 @@ training:
   stride: 16
   data_dir: "vpt/data/numpy"
   test_train_split: 0.9
-  min_class_weight: 1000
+  min_class_weight: 2000
   epochs: 100

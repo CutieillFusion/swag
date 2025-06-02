@@ -96,7 +96,8 @@ class NumpyVideoDataset:
     def _build_indices(self) -> None:
         for vid_idx, info in enumerate(self.video_info):
             n_frames = info["num_frames"]
-            for start in range(0, n_frames - self.sequence_length + 1, self.stride):
+            end = n_frames - self.sequence_length if self.is_vpt else n_frames - self.sequence_length + 1
+            for start in range(0, end, self.stride):
                 self.sequence_indices.append((vid_idx, start))
 
     def _filter_sequences(self, label_val, threshold) -> None:
